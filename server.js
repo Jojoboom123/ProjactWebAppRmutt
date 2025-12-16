@@ -8,6 +8,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const Room = require('./models/Room');
+const Message = require('./models/Message');
 const app = express();
 const PORT = 3000;
 
@@ -98,7 +99,29 @@ io.on('connection', (socket) => {
         socket.join(roomId);
         console.log(`User ${socket.id} joined room ${roomId}`);
     });
+    socket.on('send_message', async (data) => {
+        try {
+            const { roomId, senderId, message } = data;
 
+            // บันทึกลง Database
+            const newMessage = new Message({
+                roomId,
+                sender: senderId,
+                message
+            });
+            await newMessage.save();
+
+            // ดึงข้อมูลคนส่ง (ชื่อ, รูปภาพ) เพื่อส่งกลับไปหาทุกคนในห้อง
+            const messageData = await newMessage.populate('sender', 'username firstName profilePicture');
+
+            // ส่งหาทุกคนในห้อง (รวมถึงคนส่งด้วย)
+            io.to(roomId).emit('receive_message', messageData);
+            console.log(`📩 Message in room ${roomId}: ${message}`);
+
+        } catch (error) {
+            console.error("Error sending message:", error);
+        }
+     });
     socket.on('delete_room', async (data) => {
         const { roomId, ownerId } = data;
         try {

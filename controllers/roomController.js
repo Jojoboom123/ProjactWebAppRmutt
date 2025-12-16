@@ -10,9 +10,9 @@ exports.createRoom = async (req, res) => {
             description,
             location: { lat, lng, address },
             activityDate,
-            password: password || null, 
+            password: password || null,
             createdBy: req.userId,
-            participants: [req.userId] 
+            participants: [req.userId]
         });
 
         await newRoom.save();
@@ -25,7 +25,7 @@ exports.createRoom = async (req, res) => {
 
 exports.getAllRooms = async (req, res) => {
     try {
-        
+
         const rooms = await Room.find()
             .populate('createdBy', 'username firstName profilePicture')
             .populate('participants', 'username firstName profilePicture')
@@ -46,7 +46,6 @@ exports.joinRoom = async (req, res) => {
         const room = await Room.findById(roomId);
         if (!room) return res.status(404).json({ message: 'ไม่พบห้องนี้' });
 
-       
         if (room.bannedUsers.includes(userId)) {
             return res.status(403).json({ message: 'คุณถูกแบนจากห้องนี้ ไม่สามารถเข้าร่วมได้' });
         }
@@ -55,17 +54,21 @@ exports.joinRoom = async (req, res) => {
             return res.status(400).json({ message: 'คุณอยู่ในห้องนี้อยู่แล้ว' });
         }
 
-        
-        if (room.password && room.password !== password) {
-            return res.status(401).json({ message: 'รหัสผ่านเข้าห้องไม่ถูกต้อง' });
-        }
 
+        if (room.password) {
+
+            const isMatch = await room.comparePassword(password);
+            if (!isMatch) {
+                return res.status(401).json({ message: 'รหัสผ่านเข้าห้องไม่ถูกต้อง' });
+            }
+        }
         room.participants.push(userId);
         await room.save();
 
         res.json({ message: 'เข้าร่วมห้องสำเร็จ!', room });
 
     } catch (error) {
+        console.error(error);
         res.status(500).json({ message: 'Server Error' });
     }
 };
@@ -92,20 +95,19 @@ exports.deleteRoom = async (req, res) => {
 //  (Kick/Ban)
 exports.kickUser = async (req, res) => {
     try {
-        const { roomId, targetUserId, ban } = req.body; 
+        const { roomId, targetUserId, ban } = req.body;
         const room = await Room.findById(roomId);
 
         if (!room) return res.status(404).json({ message: 'ไม่พบห้องนี้' });
 
-        
+
         if (room.createdBy.toString() !== req.userId) {
             return res.status(403).json({ message: 'คุณไม่ใช่เจ้าของห้อง สั่งเตะใครไม่ได้!' });
         }
 
-       
         room.participants = room.participants.filter(id => id.toString() !== targetUserId);
 
-       
+
         if (ban === true) {
             room.bannedUsers.push(targetUserId);
         }

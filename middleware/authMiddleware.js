@@ -6,7 +6,7 @@ const verifyToken = (req, res, next) => {
     const tokenHeader = req.headers['authorization'];
 
     if (!tokenHeader) {
-        return res.status(403).json({ message: 'No token provided (ไม่ได้ส่งบัตรผ่าน)' });
+        return res.status(403).json({ message: 'No token provided (ไม่ได้ส่งToken)' });
     }
 
     const token = tokenHeader.split(' ')[1];
