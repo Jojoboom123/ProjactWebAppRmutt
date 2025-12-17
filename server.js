@@ -51,8 +51,8 @@ app.post('/api/create-room', upload.single('roomImage'), verifyToken,async (req,
     try {
         console.log("📝 ได้รับข้อมูลสร้างห้อง:", req.body);
         console.log("🖼️ ไฟล์รูปภาพ:", req.file);
-
-        const { title, description, activityDate, location, createdBy, roomType, password } = req.body;
+        const createdBy = req.userId;
+        const { title, description, activityDate, location,  roomType, password } = req.body;
 
         let parsedLocation = location;
         if (typeof location === 'string') {
@@ -68,13 +68,13 @@ app.post('/api/create-room', upload.single('roomImage'), verifyToken,async (req,
             description,
             activityDate,
             location: parsedLocation,
-            createdBy,
+            createdBy: createdBy,
             roomType,
             password: roomType === 'public' ? null : password,
             
             roomImage: req.file ? 'uploads/' + req.file.filename : "" 
         });
-
+        
        await newRoom.save();
 
         console.log(`✅ Room Created: ${newRoom.title} (Image: ${newRoom.roomImage})`);
