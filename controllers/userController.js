@@ -4,18 +4,15 @@ const bcrypt = require('bcryptjs');
 exports.updateProfile = async (req, res) => {
     try {
         const userId = req.user ? req.user.id : req.userId;
-        const { firstName, lastName, password } = req.body;
+        // รับแค่ password มาอัปเดต (ถ้ามี)
+        const { password } = req.body;
 
         let user = await User.findById(userId);
         if (!user) {
-            return res.status(404).json({ 
-                success: false, 
-                message: 'User not found' 
-            });
+            return res.status(404).json({ success: false, message: 'User not found' });
         }
 
-        if (firstName) user.firstName = firstName;
-        if (lastName) user.lastName = lastName;
+        // *** ลบส่วนอัปเดต firstName, lastName ออก ***
 
         if (password) {
             const salt = await bcrypt.genSalt(10);
@@ -23,7 +20,7 @@ exports.updateProfile = async (req, res) => {
         }
   
         if (req.file) {
-            user.profilePicture = req.file.path; 
+            user.profileImage = req.file.path; // เช็คชื่อ field ใน DB ให้ตรงกัน (profileImage vs profilePicture)
         }
 
         await user.save(); 
@@ -33,17 +30,13 @@ exports.updateProfile = async (req, res) => {
             message: 'อัปเดตโปรไฟล์สำเร็จ!',
             user: {
                 username: user.username,
-                firstName: user.firstName,
-                lastName: user.lastName,
-                profilePicture: user.profilePicture
+                phoneNumber: user.phoneNumber,
+                profileImage: user.profileImage
             }
         });
 
     } catch (error) {
         console.error(error);
-        res.status(500).json({ 
-            success: false, 
-            message: 'Server Error' 
-        });
+        res.status(500).json({ success: false, message: 'Server Error' });
     }
 };

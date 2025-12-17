@@ -4,26 +4,26 @@ const bcrypt = require('bcryptjs');
 const userSchema = new mongoose.Schema({
     username: { 
         type: String, 
-        required: true, 
-        unique: true 
+        required: true 
     },
-   
     password: { 
         type: String, 
         required: true 
     },
-    firstName: { type: String, required: true },
-    lastName: { type: String, required: true },
-    phoneNumber: { type: String, required: true },
+    phoneNumber: { 
+        type: String, 
+        required: true, 
+        unique: true 
+    },
     profileImage: { type: String, default: "" },
     createdAt: { type: Date, default: Date.now }
 });
 
-userSchema.pre('save', async function(next) {
-    if (!this.isModified('password')) return next();
+userSchema.pre('save', async function() {
+    if (!this.isModified('password')) return; // ถ้าไม่ได้แก้รหัสผ่าน ก็ออกไปเลย
+
     const salt = await bcrypt.genSalt(10);
     this.password = await bcrypt.hash(this.password, salt);
-    next();
 });
 
 module.exports = mongoose.model('User', userSchema);

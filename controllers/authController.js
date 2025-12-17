@@ -7,85 +7,74 @@ const SECRET_KEY = process.env.JWT_SECRET;
 // (Register)
 exports.register = async (req, res) => {
     try {
-        const { username, password, firstName, lastName, phoneNumber } = req.body;
+        const { username, phoneNumber, password, confirmPassword } = req.body;
         
-        if (!username || !password || !firstName || !lastName || !phoneNumber) {
-            return res.status(400).json({ success: false, message: 'Please fill in all fields (กรุณากรอกข้อมูลให้ครบถ้วน)' });
+        if (!username || !phoneNumber || !password || !confirmPassword) {
+            return res.status(400).json({ success: false, message: 'กรุณากรอกข้อมูลให้ครบถ้วน' });
         }
 
-        const existingUser = await User.findOne({ username });
-        if (existingUser) {
-            return res.status(400).json({ success: false, message: 'User already exists' });
+        if (password !== confirmPassword) {
+            return res.status(400).json({ success: false, message: 'รหัสผ่านไม่ตรงกัน' });
         }
 
-        const salt = await bcrypt.genSalt(10);
-        const hashedPassword = await bcrypt.hash(password, salt);
-      
+        // --- เช็คแค่เบอร์โทรศัพท์ซ้ำ (Username ซ้ำได้แล้ว) ---
+        const existingPhone = await User.findOne({ phoneNumber });
+        if (existingPhone) {
+            return res.status(400).json({ success: false, message: 'เบอร์โทรศัพท์นี้ถูกใช้งานแล้ว' });
+        }
+        // ------------------------------------------------
+
         const newUser = new User({ 
             username, 
-            password: hashedPassword, 
-            firstName,
-            lastName,
+            password, 
             phoneNumber
         });
 
         await newUser.save(); 
 
-        res.status(201).json({ success: true, message: 'User registered successfully!' });
+        res.status(201).json({ success: true, message: 'สมัครสมาชิกสำเร็จ!' });
 
     } catch (error) {
         console.error(error);
-        res.status(500).json({ success: false, message: 'Server Error' });
+        res.status(500).json({ success: false, message: 'Server Error', error: error.message });
     }
 };
+
 // (Login)
 exports.login = async (req, res) => {
     try {
-        const { username, password } = req.body;
+        const { phoneNumber, password } = req.body;
 
-        if (!username || !password) {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'Please provide username and password' 
-            });
+        if (!phoneNumber || !password) {
+            return res.status(400).json({ success: false, message: 'กรุณากรอกเบอร์โทรศัพท์และรหัสผ่าน' });
         }
 
-        const user = await User.findOne({ username });
-        
+        const user = await User.findOne({ phoneNumber });
         if (!user) {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'User not found' 
-            });
+            return res.status(400).json({ success: false, message: 'ไม่พบผู้ใช้งานเบอร์โทรศัพท์นี้' });
         }
 
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'Invalid credentials' 
-            });
+            return res.status(400).json({ success: false, message: 'รหัสผ่านไม่ถูกต้อง' });
         }
 
         const token = jwt.sign({ id: user._id, username: user.username }, SECRET_KEY, { expiresIn: '1d' });
         
         res.json({ 
             success: true,
-            message: 'Login successful', 
+            message: 'เข้าสู่ระบบสำเร็จ', 
             token,
             user: { 
+                id: user._id,
                 username: user.username,
-                firstName: user.firstName,
-                lastName: user.lastName,
-                profilePicture: user.profilePicture 
+                phoneNumber: user.phoneNumber,
+                profileImage: user.profileImage
             }
         });
 
     } catch (error) {
         console.error(error); 
-        res.status(500).json({ 
-            success: false, 
-            message: 'Server Error' 
-        });
+        res.status(500).json({ success: false, message: 'Server Error' });
     }
 };

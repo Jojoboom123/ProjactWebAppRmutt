@@ -21,10 +21,17 @@ const roomSchema = new mongoose.Schema({
         min: [2, 'Room must have at least 2 participants'] 
     },
 
-    location: {
-        lat: { type: Number, required: true },
-        lng: { type: Number, required: true },
-        address: { type: String, default: "" }
+   location: {
+        type: {
+            type: String,
+            enum: ['Point'],
+            required: true
+        },
+        coordinates: {
+            type: [Number],
+            required: true
+        }
+        
     },
     activityDate: { type: Date, required: true },  
     participants: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }], 
@@ -36,7 +43,7 @@ const roomSchema = new mongoose.Schema({
     }, 
     createdAt: { type: Date, default: Date.now }
 });
-
+roomSchema.index({ location: '2dsphere' });
 roomSchema.pre('save', async function() {
     if (!this.isModified('password') || !this.password) return;
 
