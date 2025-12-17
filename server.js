@@ -47,7 +47,7 @@ const io = new Server(server, {
 });
 
 
-app.post('/api/create-room', upload.single('roomImage'), async (req, res) => {
+app.post('/api/create-room', upload.single('roomImage'), verifyToken,async (req, res) => {
     try {
         console.log("📝 ได้รับข้อมูลสร้างห้อง:", req.body);
         console.log("🖼️ ไฟล์รูปภาพ:", req.file);
