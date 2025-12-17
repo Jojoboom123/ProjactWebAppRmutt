@@ -29,7 +29,7 @@ exports.createRoom = async (req, res) => {
             maxParticipants: maxParticipants || 10, 
             createdBy: req.userId,
             participants: [req.userId],
-            roomImage: req.file ? 'uploads/' + req.file.filename : "" 
+            roomImage: req.file ? req.file.filename : "" 
         });
 
         await newRoom.save();

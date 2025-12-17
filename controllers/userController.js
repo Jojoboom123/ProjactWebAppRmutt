@@ -4,7 +4,6 @@ const bcrypt = require('bcryptjs');
 exports.updateProfile = async (req, res) => {
     try {
         const userId = req.user ? req.user.id : req.userId;
-        // รับแค่ password มาอัปเดต (ถ้ามี)
         const { password } = req.body;
 
         let user = await User.findById(userId);
@@ -12,15 +11,13 @@ exports.updateProfile = async (req, res) => {
             return res.status(404).json({ success: false, message: 'User not found' });
         }
 
-        // *** ลบส่วนอัปเดต firstName, lastName ออก ***
-
         if (password) {
             const salt = await bcrypt.genSalt(10);
             user.password = await bcrypt.hash(password, salt);
         }
   
         if (req.file) {
-            user.profileImage = req.file.path; // เช็คชื่อ field ใน DB ให้ตรงกัน (profileImage vs profilePicture)
+            user.profileImage = req.file.path; 
         }
 
         await user.save(); 
