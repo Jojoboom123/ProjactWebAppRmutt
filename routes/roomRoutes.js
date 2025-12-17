@@ -10,6 +10,7 @@ router.post('/:roomId/join-public', verifyToken, roomController.joinPublicRoom);
 router.post('/:roomId/join-private', verifyToken, roomController.joinPrivateRoom);
 
 router.delete('/delete', verifyToken, roomController.deleteRoom);
+router.post('/information', verifyToken, roomController.getRoomInformation);
 router.post('/kick', verifyToken, roomController.kickUser);
 
 router.get('/:roomId/messages', verifyToken, roomController.getRoomMessages);

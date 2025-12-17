@@ -129,7 +129,7 @@ exports.joinPrivateRoom = async (req, res) => {
     try {
         const { roomId } = req.params;
         const { password } = req.body; 
-
+        const userId = req.userId;
         const room = await Room.findById(roomId);
         if (!room) return res.status(404).json({ success: false, message: 'ไม่พบห้องนี้' });
 
@@ -171,6 +171,42 @@ exports.deleteRoom = async (req, res) => {
         res.json({ success: true, message: 'ลบห้องเรียบร้อยแล้ว' });
 
     } catch (error) {
+        res.status(500).json({ success: false, message: 'Server Error' });
+    }
+};
+exports.getRoomInformation = async (req, res) => {
+    try {
+  
+        const { roomId } = req.body;
+
+        if (!roomId) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Please provide roomId in the body' 
+            });
+        }
+
+        const room = await Room.findById(roomId)
+            .populate('createdBy', 'username firstName lastName profilePicture') 
+            .populate('participants', 'username');
+
+        if (!room) {
+            return res.status(404).json({ 
+                success: false, 
+                message: 'Room not found' 
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            data: room
+        });
+
+    } catch (error) {
+        console.error(error);
+        if (error.kind === 'ObjectId') {
+            return res.status(400).json({ success: false, message: 'Invalid Room ID format' });
+        }
         res.status(500).json({ success: false, message: 'Server Error' });
     }
 };
