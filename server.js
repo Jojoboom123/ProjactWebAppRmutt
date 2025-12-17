@@ -103,7 +103,6 @@ io.on('connection', (socket) => {
         try {
             const { roomId, senderId, message } = data;
 
-            // บันทึกลง Database
             const newMessage = new Message({
                 roomId,
                 sender: senderId,
@@ -111,10 +110,8 @@ io.on('connection', (socket) => {
             });
             await newMessage.save();
 
-            // ดึงข้อมูลคนส่ง (ชื่อ, รูปภาพ) เพื่อส่งกลับไปหาทุกคนในห้อง
             const messageData = await newMessage.populate('sender', 'username firstName profilePicture');
 
-            // ส่งหาทุกคนในห้อง (รวมถึงคนส่งด้วย)
             io.to(roomId).emit('receive_message', messageData);
             console.log(`📩 Message in room ${roomId}: ${message}`);
 
