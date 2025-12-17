@@ -17,12 +17,10 @@ exports.register = async (req, res) => {
             return res.status(400).json({ success: false, message: 'รหัสผ่านไม่ตรงกัน' });
         }
 
-        // --- เช็คแค่เบอร์โทรศัพท์ซ้ำ (Username ซ้ำได้แล้ว) ---
         const existingPhone = await User.findOne({ phoneNumber });
         if (existingPhone) {
             return res.status(400).json({ success: false, message: 'เบอร์โทรศัพท์นี้ถูกใช้งานแล้ว' });
         }
-        // ------------------------------------------------
 
         const newUser = new User({ 
             username, 
@@ -51,12 +49,12 @@ exports.login = async (req, res) => {
 
         const user = await User.findOne({ phoneNumber });
         if (!user) {
-            return res.status(400).json({ success: false, message: 'ไม่พบผู้ใช้งานเบอร์โทรศัพท์นี้' });
+            return res.status(400).json({ success: false, message: 'เบอร์โทรศัพท์หรือรหัสผ่านไม่ถูกต้อง' });
         }
 
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) {
-            return res.status(400).json({ success: false, message: 'รหัสผ่านไม่ถูกต้อง' });
+            return res.status(400).json({ success: false, message: 'เบอร์โทรศัพท์หรือรหัสผ่านไม่ถูกต้อง' });
         }
 
         const token = jwt.sign({ id: user._id, username: user.username }, SECRET_KEY, { expiresIn: '1d' });

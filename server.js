@@ -59,12 +59,8 @@ app.post('/api/create-room', upload.single('roomImage'), async (req, res) => {
             try {
                 parsedLocation = JSON.parse(location);
             } catch (e) {
-                return res.status(400).json({ message: 'รูปแบบ Location ไม่ถูกต้อง' });
+                return res.status(400).json({ message: 'Location format invalid (must be JSON string)' });
             }
-        }
-
-        if (roomType === 'private' && (!password || password.trim() === "")) {
-            return res.status(400).json({ message: 'ห้องส่วนตัวต้องมีรหัสผ่าน' });
         }
 
         const newRoom = new Room({
@@ -75,10 +71,11 @@ app.post('/api/create-room', upload.single('roomImage'), async (req, res) => {
             createdBy,
             roomType,
             password: roomType === 'public' ? null : password,
-            roomImage: req.file ? req.file.filename : "" 
+            
+            roomImage: req.file ? 'uploads/' + req.file.filename : "" 
         });
 
-        await newRoom.save();
+       await newRoom.save();
 
         console.log(`✅ Room Created: ${newRoom.title} (Image: ${newRoom.roomImage})`);
 
