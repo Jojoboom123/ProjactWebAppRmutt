@@ -14,11 +14,9 @@ const storage = multer.diskStorage({
     }
 });
 const upload = multer({ storage: storage });
-
+router.post('/request-otp', authController.requestOtp);
 router.post('/register', authController.register);
 router.post('/login', authController.login);
-
-
 router.put('/update-profile', verifyToken, upload.single('image'), userController.updateProfile);
 
 module.exports = router;
