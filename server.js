@@ -81,7 +81,7 @@ app.post('/api/create-room', upload.single('roomImage'), verifyToken,async (req,
 
         io.emit('refresh_room_list'); 
 
-        res.status(201).json({ message: 'สร้างห้องสำเร็จ', room: newRoom });
+        res.status(201).json({ success: true, message: 'สร้างห้องสำเร็จ', room: newRoom });
 
     } catch (error) {
         console.error("Error:", error);

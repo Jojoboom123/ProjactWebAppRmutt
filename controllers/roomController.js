@@ -69,7 +69,7 @@ exports.getAllRooms = async (req, res) => {
                         distanceField: "distanceFromMe", //สำหรับบอกระยะห่างห้องถ้าส่งพิกัดมา
                         maxDistance: searchRadius,
                         spherical: true,
-                        distanceMultiplier: 0.001 
+                        distanceMultiplier: 1 
                     }
                 },
                 {
@@ -137,33 +137,71 @@ exports.joinPublicRoom = async (req, res) => {
 exports.joinPrivateRoom = async (req, res) => {
     try {
         const { roomId } = req.params;
-        const { password } = req.body; 
+        const { password } = req.body;
         const userId = req.userId;
-        const room = await Room.findById(roomId);
-        if (!room) return res.status(404).json({ success: false, message: 'ไม่พบห้องนี้' });
 
-        if (room.roomType !== 'private') {
-            return res.status(400).json({ success: false, message: 'ห้องนี้เป็น Public' });
+        // ✅ เช็ค password ก่อน
+        if (!password) {
+            return res.status(400).json({
+                success: false,
+                message: 'กรุณากรอกรหัสผ่าน'
+            });
         }
 
-        
-        const isMatch = await bcrypt.compare(password, room.password);
-        if (!isMatch) return res.status(401).json({ success: false, message: 'รหัสผ่านผิด' });
+        // ✅ ต้องประกาศ room ก่อนใช้งาน
+        const room = await Room.findById(roomId);
+        if (!room) {
+            return res.status(404).json({
+                success: false,
+                message: 'ไม่พบห้องนี้'
+            });
+        }
 
-        if (room.bannedUsers.includes(userId)) return res.status(403).json({ message: 'คุณถูกแบน' });
-        if (room.participants.includes(userId)) return res.status(400).json({ message: 'อยู่แล้ว' });
-        if (room.participants.length >= room.maxParticipants) return res.status(400).json({ message: 'ห้องเต็ม' });
+        if (room.roomType !== 'private') {
+            return res.status(400).json({
+                success: false,
+                message: 'ห้องนี้เป็น Public'
+            });
+        }
+
+        const isMatch = await bcrypt.compare(password, room.password);
+        if (!isMatch) {
+            return res.status(401).json({
+                success: false,
+                message: 'รหัสผ่านผิด'
+            });
+        }
+
+        if (room.bannedUsers.some(id => id.toString() === userId)) {
+            return res.status(403).json({ message: 'คุณถูกแบน' });
+        }
+
+        if (room.participants.some(id => id.toString() === userId)) {
+            return res.status(400).json({ message: 'อยู่แล้ว' });
+        }
+
+        if (room.participants.length >= room.maxParticipants) {
+            return res.status(400).json({ message: 'ห้องเต็ม' });
+        }
 
         room.participants.push(userId);
         await room.save();
 
-        res.json({ success: true, message: 'เข้าร่วมห้องสำเร็จ!', room });
+        res.json({
+            success: true,
+            message: 'เข้าร่วมห้องสำเร็จ!',
+            room
+        });
 
     } catch (error) {
         console.error(error);
-        res.status(500).json({ success: false, message: 'Server Error' });
+        res.status(500).json({
+            success: false,
+            message: 'Server Error'
+        });
     }
 };
+
 
 exports.deleteRoom = async (req, res) => {
     try {
