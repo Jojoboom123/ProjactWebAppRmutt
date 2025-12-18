@@ -3,7 +3,6 @@ const router = express.Router();
 const roomController = require('../controllers/roomController');
 const verifyToken = require('../middleware/authMiddleware'); 
 
-router.post('/create', verifyToken, roomController.createRoom);
 router.get('/', roomController.getAllRooms);
 
 router.post('/:roomId/join-public', verifyToken, roomController.joinPublicRoom);

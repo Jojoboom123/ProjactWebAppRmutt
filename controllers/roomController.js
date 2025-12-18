@@ -53,32 +53,41 @@ exports.createRoom = async (req, res) => {
 exports.getAllRooms = async (req, res) => {
     try {
         let { lat, lng, radius } = req.query;
-        let query = {};
+
+        let rooms;
 
         if (lat && lng && radius) {
+           
             const userLat = parseFloat(lat);
             const userLng = parseFloat(lng);
-            const searchRadius = parseFloat(radius) * 1000;
+            const searchRadius = parseFloat(radius) * 1000; 
 
-            query.location = {
-                $near: {
-                    $geometry: {
-                        type: "Point",
-                        coordinates: [userLng, userLat]
-                    },
-                    $maxDistance: searchRadius
+            rooms = await Room.aggregate([
+                {
+                    $geoNear: {
+                        near: { type: "Point", coordinates: [userLng, userLat] },
+                        distanceField: "distanceFromMe", //สำหรับบอกระยะห่างห้องถ้าส่งพิกัดมา
+                        maxDistance: searchRadius,
+                        spherical: true,
+                        distanceMultiplier: 0.001 
+                    }
+                },
+                {
+                    $sort: { distanceFromMe: 1 } 
                 }
-            };
-        }
+            ]);
 
-        let rooms = await Room.find(query)
-            .populate('createdBy', 'username firstName profilePicture')
-            .populate('participants', 'username firstName profilePicture')
-            .lean(); 
+            
+            await Room.populate(rooms, { path: 'createdBy', select: 'username firstName profilePicture' });
+            await Room.populate(rooms, { path: 'participants', select: 'username firstName profilePicture' });
 
-        
-        if (!lat || !lng) {
-            rooms.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        } else {
+            //สำหรับค้นหาห้องทั้งหมดถ้าไม่ส่งพิกัดมา
+            rooms = await Room.find({})
+                .populate('createdBy', 'username firstName profilePicture')
+                .populate('participants', 'username firstName profilePicture')
+                .sort({ createdAt: -1 })
+                .lean();
         }
 
         res.status(200).json({ 
