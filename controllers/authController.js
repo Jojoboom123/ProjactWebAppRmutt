@@ -8,8 +8,9 @@ const SECRET_KEY = process.env.JWT_SECRET;
 // (OTP)
 exports.requestOtp = async (req, res) => {
     try {
-        const { phoneNumber } = req.body;
-
+        const  {phoneNumber}  = req.body;
+        console.log('req.body =', req.body);
+        console.log('phoneNumber =', phoneNumber);
         if (!phoneNumber) {
             return res.status(400).json({ success: false, message: 'กรุณากรอกเบอร์โทรศัพท์' });
         }
