@@ -98,12 +98,13 @@ io.on('connection', (socket) => {
     });
     socket.on('send_message', async (data) => {
         try {
-            const { roomId, senderId, message } = data;
+            const { roomId, senderId, message, image } = data;
 
             const newMessage = new Message({
                 roomId,
                 sender: senderId,
-                message
+                message: message || "", 
+                image: image || ""
             });
             await newMessage.save();
 

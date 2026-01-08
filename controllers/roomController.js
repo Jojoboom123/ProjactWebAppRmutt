@@ -301,4 +301,47 @@ exports.getRoomMessages = async (req, res) => {
     } catch (error) {
         res.status(500).json({ success: false, message: 'Server Error' });
     }
+    //Editroom//
+exports.updateRoom = async (req, res) => {
+    try {
+        const { roomId } = req.params;
+        const { title, description, activityDate, maxParticipants, roomType, password } = req.body;
+        
+        let room = await Room.findById(roomId);
+
+        if (!room) {
+            return res.status(404).json({ success: false, message: 'ไม่พบห้องนี้' });
+        }
+
+        if (room.createdBy.toString() !== req.userId) {
+            return res.status(403).json({ success: false, message: 'คุณไม่ใช่เจ้าของห้อง' });
+        }
+
+        if (title) room.title = title;
+        if (description) room.description = description;
+        if (activityDate) room.activityDate = activityDate;
+        if (maxParticipants) room.maxParticipants = maxParticipants;
+        if (roomType) room.roomType = roomType;
+
+        
+        if (password && room.roomType === 'private') {
+            room.password = password; 
+        } else if (roomType === 'public') {
+            room.password = null; 
+        }
+
+        if (req.file) {
+            
+            room.roomImage = req.file.filename;
+        }
+
+        await room.save();
+
+        res.json({ success: true, message: 'แก้ไขข้อมูลห้องสำเร็จ!', room });
+
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ success: false, message: 'Server Error' });
+    }
+};
 };
