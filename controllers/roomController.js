@@ -306,9 +306,9 @@ exports.updateRoom = async (req, res) => {
     try {
         const { roomId } = req.params;
         const { title, description, activityDate, maxParticipants, roomType, password } = req.body;
-        
+        const Room = require('../models/Room');
         let room = await Room.findById(roomId);
-
+        
         if (!room) {
             return res.status(404).json({ success: false, message: 'ไม่พบห้องนี้' });
         }
