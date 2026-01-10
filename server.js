@@ -10,7 +10,7 @@ const fs = require('fs');
 const Room = require('./models/Room');
 const Message = require('./models/Message');
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 const verifyToken = require('./middleware/authMiddleware');
 app.use(express.json());
 app.use(cors());
