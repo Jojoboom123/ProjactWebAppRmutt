@@ -15,6 +15,10 @@ const userSchema = new mongoose.Schema({
         required: true, 
         unique: true 
     },
+    radius:{
+        type: Number,
+        default: 5
+    },
     profileImage: { type: String, default: "" },
     createdAt: { type: Date, default: Date.now }
 });

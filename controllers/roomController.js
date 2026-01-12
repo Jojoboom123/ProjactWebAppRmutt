@@ -1,6 +1,7 @@
 const Room = require('../models/Room');
 const Message = require('../models/Message'); 
 const bcrypt = require('bcryptjs'); 
+const Report = require('../models/Reports');
 
 exports.createRoom = async (req, res) => {
     try {
@@ -120,7 +121,7 @@ exports.joinPublicRoom = async (req, res) => {
         }
 
         if (room.bannedUsers.includes(userId)) return res.status(403).json({ message: 'คุณถูกแบน' });
-        if (room.participants.includes(userId)) return res.status(400).json({ message: 'อยู่แล้ว' });
+        if (room.participants.includes(userId)) return res.status(200).json({ success: true, message: 'อยู่แล้ว' });
         if (room.participants.length >= room.maxParticipants) return res.status(400).json({ message: 'ห้องเต็ม' });
 
         room.participants.push(userId);
@@ -177,7 +178,7 @@ exports.joinPrivateRoom = async (req, res) => {
         }
 
         if (room.participants.some(id => id.toString() === userId)) {
-            return res.status(400).json({ message: 'อยู่แล้ว' });
+            return res.status(200).json({ success: true, message: 'อยู่แล้ว' });
         }
 
         if (room.participants.length >= room.maxParticipants) {
@@ -235,7 +236,7 @@ exports.getRoomInformation = async (req, res) => {
 
         const room = await Room.findById(roomId)
             .populate('createdBy', 'username firstName lastName profilePicture') 
-            .populate('participants', 'username');
+            .populate('participants', 'username profileImage');
 
         if (!room) {
             return res.status(404).json({ 
@@ -287,18 +288,125 @@ exports.kickUser = async (req, res) => {
 };
 
 exports.getRoomMessages = async (req, res) => {
-    try {
+   try {
         const { roomId } = req.params;
+        const { limit = 50, skip = 0 } = req.query; // รองรับ pagination
 
+        console.log(`📥 Fetching messages for room: ${roomId}`);
+
+        // ดึงข้อความจาก DB โดยเรียงตามเวลา (เก่า -> ใหม่)
         const messages = await Message.find({ roomId })
-            .populate('sender', 'username firstName profilePicture') 
-            .sort({ timestamp: 1 }); 
+            .populate('sender', 'username profilePicture') // ดึงข้อมูล sender
+            .sort({ createdAt: 1 }) // เรียงจากเก่าไปใหม่
+            .limit(parseInt(limit))
+            .skip(parseInt(skip));
 
-        res.json({ 
-            success: true, 
-            data: messages 
+        console.log(`✅ Found ${messages.length} messages`);
+
+        res.json({
+            success: true,
+            count: messages.length,
+            messages
         });
+
     } catch (error) {
-        res.status(500).json({ success: false, message: 'Server Error' });
+        console.error('❌ Error fetching messages:', error);
+        res.status(500).json({
+            success: false,
+            message: 'ไม่สามารถดึงข้อความได้: ' + error.message
+        });
     }
 };
+
+exports.getLastestMessage = async (req, res) => {
+     try {
+        const { roomId } = req.params;
+        const { before } = req.query; // Timestamp ของข้อความก่อนหน้า
+
+        let query = { roomId };
+        
+        // ถ้ามี before (เอาไว้โหลดข้อความเก่าขึ้นไป)
+        if (before) {
+            query.createdAt = { $lt: new Date(before) };
+        }
+
+        const messages = await Message.find(query)
+            .populate('sender', 'username profilePicture')
+            .sort({ createdAt: -1 }) // เรียงจากใหม่ไปเก่า
+            .limit(20);
+
+        res.json({
+            success: true,
+            count: messages.length,
+            messages: messages.reverse() // กลับด้านเพื่อให้เป็นเก่า -> ใหม่
+        });
+
+    } catch (error) {
+        console.error('❌ Error fetching latest messages:', error);
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+}
+
+exports.leaveRoom = async (req, res) => {
+    try {
+        const { roomId } = req.params;
+        const userId = req.userId;
+
+        console.log(`🚪 User ${userId} is attempting to leave room ${roomId}`);
+        const room = await Room.findById(roomId);
+
+        if (!room) return res.status(404).json({ success: false, message: 'ไม่พบห้องนี้' });    
+        room.participants = room.participants.filter(id => id.toString() !== userId);
+        await room.save();
+
+        res.json({ success: true, message: 'ออกจากห้องเรียบร้อยแล้ว' });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ success: false, message: 'Server Error' });
+    }   
+};
+
+exports.reportMessage = async (req, res) => { {
+    try {
+        const { roomId } = req.params;
+        const {  messageId, reportedUserId, reason } = req.body;
+        const reporterId = req.userId;
+        if (!roomId || !messageId || !reportedUserId || !reason) {
+            return res.status(400).json({ success: false, message: 'กรุณากรอกข้อมูลให้ครบถ้วน' });
+        }   
+        const newReport = new Report({
+            roomId,
+            messageId,
+            reportedUser: reportedUserId,
+            reporterUser: reporterId,
+            reason
+        });
+        await newReport.save();
+        res.status(201).json({ success: true, message: 'รายงานถูกส่งเรียบร้อยแล้ว' });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ success: false, message: 'Server Error' });
+    }   
+}};
+
+exports.uploadImage = async (req,res) =>{
+    try{
+        if(!req.file){
+            return res.status(400).json({seccess: false, message: 'No file upload'});
+        }
+
+        const filePath = `uploads/${req.file.filename}`;
+
+        res.status(200).json({
+            success: true,
+            message: 'Upload successful',
+            imageUrl: filePath
+        });
+    }catch (error) {
+        console.error("Upload Error:", error);
+        res.status(500).json({ success: false, message: 'Upload failed' });
+    }
+}
