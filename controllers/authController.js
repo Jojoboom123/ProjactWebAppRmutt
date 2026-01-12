@@ -16,11 +16,6 @@ exports.requestOtp = async (req, res) => {
             return res.status(400).json({ success: false, message: 'กรุณากรอกเบอร์โทรศัพท์' });
         }
 
-        // const existingUser = await User.findOne({ phoneNumber });
-        // if (existingUser) {
-        //     return res.status(400).json({ success: false, message: 'เบอร์โทรศัพท์นี้ลงทะเบียนไปแล้ว' });
-        // }
-
         await otpService.sendOtp(phoneNumber);
         
         
