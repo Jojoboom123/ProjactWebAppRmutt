@@ -36,8 +36,7 @@ exports.requestOtp = async (req, res) => {
 // (Register)
 exports.register = async (req, res) => {
     try {
-        
-        const { username, phoneNumber, password, confirmPassword, otp } = req.body;// รับค่า otp 
+        const { username, phoneNumber, password, confirmPassword, otp } = req.body; // รับค่า otp 
         
         if (!username || !phoneNumber || !password || !confirmPassword || !otp) {
             return res.status(400).json({ success: false, message: 'กรุณากรอกข้อมูลให้ครบถ้วน' });
@@ -47,10 +46,7 @@ exports.register = async (req, res) => {
             return res.status(400).json({ success: false, message: 'รหัสผ่านไม่ตรงกัน' });
         }
 
-        
-        const otpValidation = await otpService.verifyOtp(phoneNumber, otp);
-        if (!otpValidation.valid) {
-            return res.status(400).json({ success: false, message: otpValidation.message });
+        // ✅ แก้ไขตรงนี้: เหลือการตรวจสอบแค่รอบเดียว
         const otpValidation = await otpService.verifyOtp(phoneNumber, otp);
         if (!otpValidation.valid) {
             return res.status(400).json({ success: false, message: otpValidation.message });
@@ -65,7 +61,6 @@ exports.register = async (req, res) => {
             username, 
             password, 
             phoneNumber,
-           
         });
 
         await newUser.save(); 
@@ -109,7 +104,7 @@ exports.login = async (req, res) => {
                 username: user.username,
                 phoneNumber: user.phoneNumber,
                 profileImage: user.profileImage,
-                radius: user.radius
+                radius: user.radius,
                 profileImage: user.profileImage,
                 radius: user.radius
             }
@@ -234,7 +229,6 @@ exports.resetPassword = async (req, res) => {
         res.json({ success: true, message: 'รีเซ็ตรหัสผ่านสำเร็จ!' });
     }   catch (error) { 
         console.error(error);
-        res.status(500).json({ success: false, message: 'Server Error' });
-    }   
+        res.status(500).json({ success: false, message: 'Server Error' });    
     }   
 };
