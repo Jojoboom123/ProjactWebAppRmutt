@@ -4,18 +4,27 @@ const cors = require('cors');
 const mongoose = require('mongoose');
 const http = require('http');
 const { Server } = require("socket.io");
+const jwt = require('jsonwebtoken'); // ⭐ ต้องมี!
 const multer = require('multer'); 
 const path = require('path');
 const fs = require('fs');
 const Room = require('./models/Room');
 const Message = require('./models/Message');
+const roomRoutes = require('./routes/roomRoutes');
+const userRoutes = require('./routes/userRoutes');
+const authRoutes = require('./routes/authRoutes');
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 const verifyToken = require('./middleware/authMiddleware');
+
 app.use(express.json());
 app.use(cors());
 app.use('/uploads', express.static('uploads'));
 
+const SECRET_KEY = process.env.JWT_SECRET;
+
+// Multer configuration
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
         const uploadPath = 'uploads/';
@@ -30,29 +39,37 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage: storage });
 
+// MongoDB connection
 const MONGO_URI = process.env.MONGO_URI;
 mongoose.connect(MONGO_URI)
     .then(() => console.log('✅ Connected to MongoDB Atlas'))
     .catch(err => console.error('❌ DB Connection Error:', err));
 
-const authRoutes = require('./routes/authRoutes');
-app.use('/api/auth', authRoutes);
+// Routes
 
-const roomRoutes = require('./routes/roomRoutes');
+app.use('/api/auth', authRoutes);
+app.use('/api/users', userRoutes);
+
 app.use('/api/rooms', roomRoutes);
 
+// Create server and Socket.IO
 const server = http.createServer(app);
 const io = new Server(server, {
-    cors: { origin: "*", methods: ["GET", "POST"] }
+    cors: { 
+        origin: "*", 
+        methods: ["GET", "POST"],
+        credentials: true
+    }
 });
 
-
-app.post('/api/create-room', upload.single('roomImage'), verifyToken,async (req, res) => {
+// Create room endpoint
+app.post('/api/create-room', upload.single('roomImage'), verifyToken, async (req, res) => {
     try {
         console.log("📝 ได้รับข้อมูลสร้างห้อง:", req.body);
         console.log("🖼️ ไฟล์รูปภาพ:", req.file);
+        
         const createdBy = req.userId;
-        const { title, description, activityDate, location,  roomType, password } = req.body;
+        const { title, description, activityDate, location, roomType, password } = req.body;
 
         let parsedLocation = location;
         if (typeof location === 'string') {
@@ -71,16 +88,13 @@ app.post('/api/create-room', upload.single('roomImage'), verifyToken,async (req,
             createdBy: createdBy,
             roomType,
             password: roomType === 'public' ? null : password,
-            
             roomImage: req.file ? 'uploads/' + req.file.filename : "" 
         });
         
-       await newRoom.save();
-
+        await newRoom.save();
         console.log(`✅ Room Created: ${newRoom.title} (Image: ${newRoom.roomImage})`);
 
         io.emit('refresh_room_list'); 
-
         res.status(201).json({ success: true, message: 'สร้างห้องสำเร็จ', room: newRoom });
 
     } catch (error) {
@@ -89,34 +103,108 @@ app.post('/api/create-room', upload.single('roomImage'), verifyToken,async (req,
     }
 });
 
-io.on('connection', (socket) => {
-    console.log(`User connected: ${socket.id}`);
+// Socket.IO Authentication Middleware (แก้ไขให้ถูกต้อง)
+io.use((socket, next) => {
+    const token = socket.handshake.auth.token;
+    
+    console.log('🔐 Authenticating socket connection...');
+    console.log('📋 Token received:', token ? 'Yes' : 'No');
+    
+    if (!token) {
+        console.log("❌ No token provided");
+        return next(new Error("Authentication error: No token provided"));
+    }
 
+    try {
+        const decoded = jwt.verify(token, SECRET_KEY);
+        socket.user = decoded; // ✅ เก็บ user ไว้ใน socket
+        
+        console.log(`✅ Socket authenticated successfully`);
+        console.log(`👤 User ID: ${decoded.id || decoded.userId || decoded._id}`);
+        console.log(`👤 Username: ${decoded.username || 'N/A'}`);
+        
+        next();
+    } catch (err) {
+        console.log("❌ Token verification failed:", err.message);
+        return next(new Error("Authentication error: " + err.message));
+    }
+});
+
+// Socket.IO Connection Handler
+io.on('connection', (socket) => {
+    console.log('\n🔌 ===== NEW SOCKET CONNECTION =====');
+    console.log(`📱 Socket ID: ${socket.id}`);
+    console.log(`👤 User Data:`, socket.user);
+    console.log('=====================================\n');
+
+    // Join room event
     socket.on('join_room', (roomId) => {
         socket.join(roomId);
-        console.log(`User ${socket.id} joined room ${roomId}`);
+        console.log(`📥 User ${socket.user.username || socket.user.id} joined room: ${roomId}`);
     });
+
+    // Send message event
     socket.on('send_message', async (data) => {
         try {
-            const { roomId, senderId, message, image } = data;
+            console.log('\n📤 ===== SENDING MESSAGE =====');
+            console.log('Data received:', data);
+            
+            const { roomId, message, type ='text' } = data;
 
+            // ตรวจสอบว่ามี user หรือไม่
+            if (!socket.user) {
+                console.error("❌ No user found in socket - Authentication failed");
+                socket.emit('error', { message: 'Authentication error' });
+                return;
+            }
+
+            // ดึง user ID (รองรับหลายรูปแบบ)
+            const senderId = socket.user.id || socket.user.userId || socket.user._id;
+            
+            if (!senderId) {
+                console.error("❌ Cannot extract user ID from token");
+                console.error("Token payload:", socket.user);
+                socket.emit('error', { message: 'Invalid user data' });
+                return;
+            }
+
+            console.log(`👤 Sender ID: ${senderId}`);
+            console.log(`🏠 Room ID: ${roomId}`);
+            console.log(`💬 Message: ${message}`);
+
+            // สร้างข้อความใหม่
             const newMessage = new Message({
                 roomId,
                 sender: senderId,
-                message: message || "", 
-                image: image || ""
+                message,
+                type: type
             });
+            
             await newMessage.save();
+            console.log(`✅ Message saved to MongoDB: ${newMessage._id}`);
 
-            const messageData = await newMessage.populate('sender', 'username firstName profilePicture');
+            // Populate sender information
+            const messageData = await newMessage.populate('sender', 'username profilePicture');
+            console.log(`📨 Populated message data:`, messageData);
 
+            // Broadcast to room
             io.to(roomId).emit('receive_message', messageData);
-            console.log(`📩 Message in room ${roomId}: ${message}`);
+            console.log(`✅ Message broadcast to room ${roomId}`);
+            console.log('============================\n');
 
         } catch (error) {
-            console.error("Error sending message:", error);
+            console.error("\n❌ ===== ERROR SENDING MESSAGE =====");
+            console.error("Error:", error);
+            console.error("Stack:", error.stack);
+            console.error("====================================\n");
+            
+            socket.emit('error', { 
+                message: 'Failed to send message: ' + error.message 
+            });
         }
-     });
+    });
+
+    // Delete room event
     socket.on('delete_room', async (data) => {
         const { roomId, ownerId } = data;
         try {
@@ -125,6 +213,7 @@ io.on('connection', (socket) => {
                 socket.emit('error', 'ไม่พบห้องนี้ในระบบ');
                 return;
             }
+            
             await Room.findByIdAndDelete(roomId);
             
             if (room.roomImage) {
@@ -143,11 +232,16 @@ io.on('connection', (socket) => {
         }
     });
 
+    // Disconnect event
     socket.on('disconnect', () => {
-        console.log('User disconnected');
+        console.log(`⚠️ User disconnected: ${socket.id}`);
     });
 });
 
+// Start server
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+    console.log(`\n🚀 ================================`);
+    console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`🚀 http://localhost:${PORT}`);
+    console.log(`🚀 ================================\n`);
 });

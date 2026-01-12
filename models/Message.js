@@ -13,11 +13,12 @@ const MessageSchema = new mongoose.Schema({
   },
   message: { 
     type: String, 
-    required: false 
+    required: true 
   },
-  image: {
-    type: String, 
-    default: ""
+  type: {
+    type: String,
+    enum: ['text','image'], default: 'text',
+    default: 'text'
   },
   timestamp: { 
     type: Date, 
