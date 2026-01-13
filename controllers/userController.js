@@ -75,8 +75,6 @@ exports.requestChangePhoneOtp = async (req, res) => {
             return res.status(400).json({ success: false, message: 'เบอร์โทรศัพท์ไม่ถูกต้อง' });
         }
 
-        // 2. เช็คว่าเบอร์นี้มีคนอื่นใช้ไปหรือยัง
-        // (ต้องเช็คว่าไม่ใช่เบอร์ของตัวเอง และไม่ใช่เบอร์ของคนอื่น)
         const existingUser = await User.findOne({ phoneNumber: newPhoneNumber });
         if (existingUser) {
             return res.status(400).json({ success: false, message: 'เบอร์โทรศัพท์นี้มีผู้ใช้งานแล้ว' });

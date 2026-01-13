@@ -80,7 +80,6 @@ router.get('/rooms', verifyToken, verifyAdmin, async (req, res) => {
 router.delete('/rooms/:id', verifyToken, verifyAdmin, async (req, res) => {
     try {
         await Room.findByIdAndDelete(req.params.id);
-        // TODO: อย่าลืมเพิ่มโค้ดลบรูปภาพห้องออกจากโฟลเดอร์ uploads ด้วย (ถ้ามี)
         res.json({ success: true, message: 'ลบห้องสำเร็จ' });
     } catch (error) {
         res.status(500).json({ message: error.message });
