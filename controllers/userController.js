@@ -210,3 +210,22 @@ exports.updateFcmToken = async (req, res) => {
         res.status(500).json({ success: false, message: 'Server Error' });
     }
 };
+exports.getUserProfile = async (req, res) => {
+    try {
+        // req.user.id มาจาก verifyToken
+        const userId = req.user ? req.user.id : req.userId;
+        const user = await User.findById(userId).select('-password'); // ไม่ส่ง password กลับไป
+
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'User not found' });
+        }
+
+        res.json({
+            success: true,
+            user: user
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ success: false, message: 'Server Error' });
+    }
+};
