@@ -14,7 +14,7 @@ const Message = require('./models/Message');
 const roomRoutes = require('./routes/roomRoutes');
 const userRoutes = require('./routes/userRoutes');
 const authRoutes = require('./routes/authRoutes');
-
+const adminRoutes = require('./routes/adminRoutes');
 const app = express();
 const PORT = process.env.PORT || 3000;
 const verifyToken = require('./middleware/authMiddleware');
@@ -52,10 +52,12 @@ app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 
 app.use('/api/rooms', roomRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Create server and Socket.IO
 const server = http.createServer(app);
 const io = new Server(server, {
+    
     cors: { 
         origin: "*", 
         methods: ["GET", "POST"],
@@ -202,18 +204,15 @@ io.on('connection', (socket) => {
                     const userIdStr = user._id.toString();
                     const senderIdStr = senderId.toString();
 
-                    // เงื่อนไขการส่ง:
-                    // A. ไม่ส่งหาตัวเอง (คนส่งรู้อยู่แล้ว)
-                    // B. เพื่อนต้องมี fcmToken (ถ้าไม่มีแสดงว่ายังไม่ได้ Login ในมือถือ หรือไม่ได้อนุญาต)
                     if (userIdStr !== senderIdStr && user.fcmToken) {
                         
                         console.log(`📲 กำลังส่งแจ้งเตือนหา: ${user.username}`);
 
                         firebaseService.sendPushNotification(
-                            user.fcmToken,           // ส่งไปที่เครื่องเพื่อน
-                            `ข้อความใหม่จาก ${room.title}`, // หัวข้อ: ชื่อห้อง (หรือจะใช้ senderName ก็ได้)
-                            `${senderName}: ${type === 'image' ? 'ส่งรูปภาพ' : message}`, // เนื้อหา
-                            { roomId: roomId.toString() }    // Data: แนบ ID ห้องไปด้วย (เผื่อกดแล้วเด้งไปห้องแชท)
+                            user.fcmToken,          
+                            `ข้อความใหม่จาก ${room.title}`, 
+                            `${senderName}: ${type === 'image' ? 'ส่งรูปภาพ' : message}`,
+                            { roomId: roomId.toString() }   
                         );
                     }
                 });

@@ -88,7 +88,7 @@ exports.login = async (req, res) => {
         }
 
         // สร้าง Token
-        const token = jwt.sign({ id: user._id, username: user.username }, SECRET_KEY, { expiresIn: '365d' }); // แก้ให้อายุนานขึ้นหน่อยก็ได้ครับ
+        const token = jwt.sign({ id: user._id, username: user.username, role: user.role}, SECRET_KEY, { expiresIn: '365d' }); // แก้ให้อายุนานขึ้นหน่อยก็ได้ครับ
         
         res.json({ 
             success: true,
@@ -99,7 +99,8 @@ exports.login = async (req, res) => {
                 username: user.username,
                 phoneNumber: user.phoneNumber,
                 profileImage: user.profileImage,
-                radius: user.radius
+                radius: user.radius,
+                role: user.role
             }
         });
 

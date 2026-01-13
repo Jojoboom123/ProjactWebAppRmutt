@@ -15,6 +15,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage: storage });
 
+router.get('/profile', verifyToken, userController.getUserProfile);
 router.put('/update-profile', verifyToken, upload.single('image'), userController.updateProfile);
 router.get('/joined-rooms', verifyToken, userController.getJoinedRooms);
 router.post('/phone', verifyToken, userController.requestChangePhoneOtp);
