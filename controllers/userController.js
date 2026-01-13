@@ -18,7 +18,7 @@ exports.updateProfile = async (req, res) => {
         user.username = username || user.username;
   
         if (req.file) {
-            user.profileImage = uploads/${req.file.filename}; 
+            user.profileImage = `uploads/${req.file.filename}`;
         }
 
         await user.save(); 
