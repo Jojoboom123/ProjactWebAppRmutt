@@ -105,29 +105,30 @@ app.post('/api/create-room', upload.single('roomImage'), verifyToken, async (req
 });
 
 // Socket.IO Authentication Middleware (แก้ไขให้ถูกต้อง)
-io.use((socket, next) => {
-    const token = socket.handshake.auth.token;
-    
-    console.log('🔐 Authenticating socket connection...');
-    console.log('📋 Token received:', token ? 'Yes' : 'No');
-    
-    if (!token) {
-        console.log("❌ No token provided");
-        return next(new Error("Authentication error: No token provided"));
-    }
-
+io.use(async (socket, next) => {
     try {
-        const decoded = jwt.verify(token, SECRET_KEY);
-        socket.user = decoded; // ✅ เก็บ user ไว้ใน socket
+        // ✅ แก้บรรทัดนี้ครับ: ให้มันหา Token จาก "Auth" หรือ "Headers" ก็ได้
+        let token = socket.handshake.auth.token || socket.handshake.headers.token;
         
-        console.log(`✅ Socket authenticated successfully`);
-        console.log(`👤 User ID: ${decoded.id || decoded.userId || decoded._id}`);
-        console.log(`👤 Username: ${decoded.username || 'N/A'}`);
+        // (แถม) เผื่อบางทีส่งมาแบบ 'Bearer <token>' ใน Header ให้ตัดคำว่า Bearer ออก
+        if (token && token.startsWith('Bearer ')) {
+            token = token.slice(7, token.length);
+        }
+
+        if (!token) {
+            console.log("❌ Socket Refused: No Token");
+            return next(new Error('Authentication error: Token required'));
+        }
+
+        // ตรวจสอบความถูกต้องของ Token
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        socket.user = decoded; // เก็บข้อมูล User ไว้ใน Socket
         
+        console.log(`✅ Socket Authenticated: ${socket.user.username}`);
         next();
-    } catch (err) {
-        console.log("❌ Token verification failed:", err.message);
-        return next(new Error("Authentication error: " + err.message));
+    } catch (error) {
+        console.error("❌ Socket Auth Error:", error.message);
+        next(new Error('Authentication error'));
     }
 });
 
