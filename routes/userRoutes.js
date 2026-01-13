@@ -21,5 +21,6 @@ router.post('/phone', verifyToken, userController.requestChangePhoneOtp);
 router.post('/phone-verify', verifyToken, userController.verifyAndUpdatePhoneNumber);
 router.put('/radius', verifyToken, userController.updateRadius);
 router.put('/change-password', verifyToken, userController.changePassword);
+router.put('/fcm-token', verifyToken, userController.updateFcmToken);
 
 module.exports = router;

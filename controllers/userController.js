@@ -191,3 +191,24 @@ exports.updateRadius = async (req, res) => {
         
     }
 };
+exports.updateFcmToken = async (req, res) => {
+    try {
+        // รองรับทั้ง req.user (จาก Passport) และ req.userId (จาก Middleware เอง)
+        const userId = req.user ? req.user.id : req.userId;
+        const { fcmToken } = req.body;
+
+        if (!fcmToken) {
+            return res.status(400).json({ success: false, message: 'Token is required' });
+        }
+
+        // บันทึก Token ลง Database
+        await User.findByIdAndUpdate(userId, { fcmToken: fcmToken });
+
+        console.log(`📱 FCM Token updated for user: ${userId}`);
+        res.json({ success: true, message: 'FCM Token updated successfully' });
+
+    } catch (error) {
+        console.error("Update FCM Error:", error);
+        res.status(500).json({ success: false, message: 'Server Error' });
+    }
+};
