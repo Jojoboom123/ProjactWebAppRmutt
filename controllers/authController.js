@@ -166,3 +166,22 @@ exports.resetPassword = async (req, res) => {
         res.status(500).json({ success: false, message: 'Server Error' });
     }   
 };
+
+exports.logout = async (req, res) => {
+    try {
+        // ดึง ID ของคนที่จะออก (ได้มาจาก verifyToken)
+        const userId = req.user ? req.user.id : req.userId;
+
+        // ลบ fcmToken ออกจาก User คนนั้น (ตั้งเป็น null หรือ "")
+        await User.findByIdAndUpdate(userId, { fcmToken: null });
+
+        res.json({ 
+            success: true, 
+            message: 'ออกจากระบบสำเร็จ (หยุดการแจ้งเตือนแล้ว)' 
+        });
+
+    } catch (error) {
+        console.error("Logout Error:", error);
+        res.status(500).json({ success: false, message: 'Server Error' });
+    }
+};

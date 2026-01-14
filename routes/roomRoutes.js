@@ -17,6 +17,7 @@ router.get('/', roomController.getAllRooms);
 
 router.post('/:roomId/join-public', verifyToken, roomController.joinPublicRoom);
 router.post('/:roomId/join-private', verifyToken, roomController.joinPrivateRoom);
+router.put('/:id', verifyToken, upload.single('roomImage'), roomController.updateRoom);
 
 router.delete('/delete', verifyToken, roomController.deleteRoom);
 router.post('/information', verifyToken, roomController.getRoomInformation);
