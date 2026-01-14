@@ -109,7 +109,9 @@ app.post('/api/create-room', upload.single('roomImage'), verifyToken, async (req
 io.use(async (socket, next) => {
     try {
         // ✅ แก้บรรทัดนี้ครับ: ให้มันหา Token จาก "Auth" หรือ "Headers" ก็ได้
-        let token = socket.handshake.auth.token || socket.handshake.headers.token;
+        const token = socket.handshake.auth.token || 
+                      socket.handshake.query.token || 
+                      socket.handshake.headers.token;
 
         // (แถม) เผื่อบางทีส่งมาแบบ 'Bearer <token>' ใน Header ให้ตัดคำว่า Bearer ออก
         if (token && token.startsWith('Bearer ')) {

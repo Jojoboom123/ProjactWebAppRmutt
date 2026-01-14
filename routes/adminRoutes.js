@@ -1,8 +1,8 @@
 // routes/adminRoutes.js
 const express = require('express');
 const router = express.Router();
-const User = require('../models/User'); // Import User Model
-const Room = require('../models/Room'); // Import Room Model (ถ้ามี)
+const User = require('../models/User'); 
+const Room = require('../models/Room'); 
 const verifyToken = require('../middleware/authMiddleware'); 
 const verifyAdmin = require('../middleware/adminMiddleware');
 
