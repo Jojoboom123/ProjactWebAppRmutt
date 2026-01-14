@@ -3,7 +3,6 @@ const router = express.Router();
 const notificationController = require('../controllers/notificationController');
 const verifyToken = require('../middleware/authMiddleware');
 
-// ต้อง Login ก่อนถึงจะเข้าถึงได้
 router.use(verifyToken);
 
 router.get('/', notificationController.getUserNotifications); // ดึงทั้งหมด

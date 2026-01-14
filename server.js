@@ -75,45 +75,34 @@ app.post('/api/create-room', upload.single('roomImage'), verifyToken, async (req
     try {
         console.log("📝 ได้รับข้อมูลสร้างห้อง:", req.body);
         console.log("🖼️ ไฟล์รูปภาพ:", req.file);
+        
+        const createdBy = req.userId;
+        const { title, description, activityDate, location, roomType, password } = req.body;
 
-        // ดึงค่าจาก Body (ส่งแบบ FormData ค่าทั้งหมดจะเป็น String ต้องระวัง)
-        const { title, description, lat, lng, address, activityDate, password, roomType, maxParticipants } = req.body;
-       
-        // Validate ข้อมูลบังคับ
-        if (!title || !lat || !lng || !activityDate) {
-             return res.status(400).json({ 
-                 success: false, 
-                 message: 'กรุณากรอกข้อมูลให้ครบ (ชื่อห้อง, พิกัด, วันเวลานัดหมาย)' 
-             });
+        let parsedLocation = location;
+        if (typeof location === 'string') {
+            try {
+                parsedLocation = JSON.parse(location);
+            } catch (e) {
+                return res.status(400).json({ message: 'Location format invalid (must be JSON string)' });
+            }
         }
-       
+
         const newRoom = new Room({
             title,
             description,
-            
-            // ✅ จัด Format Location ให้ตรงกับ Schema (GeoJSON)
-            location: { 
-                type: 'Point', 
-                // สำคัญ: ต้องเป็น [lng, lat] และต้องเป็นตัวเลข (Float)
-                coordinates: [parseFloat(lng), parseFloat(lat)], 
-                address: address || ""
-            },
-            
             activityDate,
-            password: password || null, 
-            roomType: roomType || 'public',
-            maxParticipants: parseInt(maxParticipants) || 10, // แปลงเป็น int กันเหนียว
-            createdBy: req.userId,
-            participants: [req.userId], // คนสร้างต้องเป็นสมาชิกคนแรกเสมอ
-            
-            // ✅ ใส่ path 'uploads/' เพื่อให้ Frontend เรียกใช้ง่ายๆ
+            location: parsedLocation,
+            createdBy: createdBy,
+            roomType,
+            participants: [createdBy],
+            password: roomType === 'public' ? null : password,
             roomImage: req.file ? 'uploads/' + req.file.filename : "" 
-        }); // 👈 ของเดิมลืมปิดตรงนี้ครับ
-
+        });
+        
         await newRoom.save();
         console.log(`✅ Room Created: ${newRoom.title} (Image: ${newRoom.roomImage})`);
-
-        io.emit('refresh_room_list');
+        io.emit('refresh_room_list'); 
         res.status(201).json({ success: true, message: 'สร้างห้องสำเร็จ', room: newRoom });
 
     } catch (error) {
