@@ -268,7 +268,7 @@ io.on('connection', (socket) => {
 // Start server
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`\n🚀 ================================`);
-    console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`🚀 Server Updated & Running on port ${PORT}`);
     console.log(`🚀 http://localhost:${PORT}`);
     console.log(`🚀 ================================\n`);
 });
