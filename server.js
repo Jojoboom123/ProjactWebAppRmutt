@@ -53,7 +53,9 @@ app.use('/api/users', userRoutes);
 
 app.use('/api/rooms', roomRoutes);
 app.use('/api/admin', adminRoutes);
-
+app.get('/', (req, res) => {
+    res.send('Server is running normally! 🚀');
+});
 // Create server and Socket.IO
 const server = http.createServer(app);
 const io = new Server(server, {
