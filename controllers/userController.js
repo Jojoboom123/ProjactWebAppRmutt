@@ -75,8 +75,6 @@ exports.requestChangePhoneOtp = async (req, res) => {
             return res.status(400).json({ success: false, message: 'เบอร์โทรศัพท์ไม่ถูกต้อง' });
         }
 
-        // 2. เช็คว่าเบอร์นี้มีคนอื่นใช้ไปหรือยัง
-        // (ต้องเช็คว่าไม่ใช่เบอร์ของตัวเอง และไม่ใช่เบอร์ของคนอื่น)
         const existingUser = await User.findOne({ phoneNumber: newPhoneNumber });
         if (existingUser) {
             return res.status(400).json({ success: false, message: 'เบอร์โทรศัพท์นี้มีผู้ใช้งานแล้ว' });
@@ -152,7 +150,7 @@ exports.getJoinedRooms = async (req,res) => {
           pipeline: [
             { $match: { $expr: { $eq: ['$roomId', '$$roomId'] } } },
             { $sort: { createdAt: -1 } }, // เรียงเอาใหม่สุด
-            { $limit: 1 } // เอาแค่อันเดียว
+            { $limit: 1 } 
           ],
           as: 'lastMessageData'
         }
@@ -163,7 +161,7 @@ exports.getJoinedRooms = async (req,res) => {
           lastMessageTime: { $arrayElemAt: ['$lastMessageData.createdAt', 0] } // ดึงเวลาออกมา
         }
       },
-      { $project: { lastMessageData: 0 } } // ลบ temp field ออก
+      { $project: { lastMessageData: 0 } } 
     ]);
 
     res.json({ success: true, data: rooms });
@@ -191,6 +189,27 @@ exports.updateRadius = async (req, res) => {
         
     }
 };
+exports.updateFcmToken = async (req, res) => {
+    try {
+        // รองรับทั้ง req.user (จาก Passport) และ req.userId (จาก Middleware เอง)
+        const userId = req.user ? req.user.id : req.userId;
+        const { fcmToken } = req.body;
+
+        if (!fcmToken) {
+            return res.status(400).json({ success: false, message: 'Token is required' });
+        }
+
+        // บันทึก Token ลง Database
+        await User.findByIdAndUpdate(userId, { fcmToken: fcmToken });
+
+        console.log(`📱 FCM Token updated for user: ${userId}`);
+        res.json({ success: true, message: 'FCM Token updated successfully' });
+
+    } catch (error) {
+        console.error("Update FCM Error:", error);
+        res.status(500).json({ success: false, message: 'Server Error' });
+    }
+};
 exports.getUserProfile = async (req, res) => {
     try {
         // req.user.id มาจาก verifyToken
@@ -210,4 +229,3 @@ exports.getUserProfile = async (req, res) => {
         res.status(500).json({ success: false, message: 'Server Error' });
     }
 };
-

@@ -1,5 +1,4 @@
 const jwt = require('jsonwebtoken');
-
 const SECRET_KEY = process.env.JWT_SECRET;
 
 const verifyToken = (req, res, next) => {
@@ -29,8 +28,13 @@ const verifyToken = (req, res, next) => {
             });
         }
 
-        req.userId = decoded.id;
+        // ✅ แก้ไขตรงนี้: เก็บข้อมูลทั้งหมด (รวมถึง role) ไว้ใน req.user
+        req.user = decoded; 
+        
+        // (เก็บอันเก่าไว้ด้วย เผื่อโค้ดอื่นเรียกใช้)
+        req.userId = decoded.id; 
         req.username = decoded.username;
+        
         next();
     });
 };

@@ -20,5 +20,5 @@ router.post('/login', authController.login);
 router.put('/update-profile', verifyToken, upload.single('image'), userController.updateProfile);
 router.post('/phone-validate', authController.checkPhoneNumber);
 router.put('/reset-password',  authController.resetPassword);
-
+router.post('/logout', verifyToken, authController.logout);
 module.exports = router;

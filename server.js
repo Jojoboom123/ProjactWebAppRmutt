@@ -1,11 +1,12 @@
+const firebaseService = require('./services/firebaseService');
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
 const http = require('http');
 const { Server } = require("socket.io");
-const jwt = require('jsonwebtoken'); // ⭐ ต้องมี!
-const multer = require('multer'); 
+const jwt = require('jsonwebtoken');
+const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const Room = require('./models/Room');
@@ -13,7 +14,7 @@ const Message = require('./models/Message');
 const roomRoutes = require('./routes/roomRoutes');
 const userRoutes = require('./routes/userRoutes');
 const authRoutes = require('./routes/authRoutes');
-
+const adminRoutes = require('./routes/adminRoutes');
 const app = express();
 const PORT = process.env.PORT || 3000;
 const verifyToken = require('./middleware/authMiddleware');
@@ -51,15 +52,20 @@ app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 
 app.use('/api/rooms', roomRoutes);
-
+app.use('/api/admin', adminRoutes);
+app.get('/', (req, res) => {
+    res.send('Server is running normally! 🚀');
+});
 // Create server and Socket.IO
 const server = http.createServer(app);
 const io = new Server(server, {
-    cors: { 
-        origin: "*", 
+    path: "/socket.io",
+    cors: {
+        origin: "*",
         methods: ["GET", "POST"],
-        credentials: true
-    }
+        credentials: true,
+    },
+    transports: ["websocket"], 
 });
 
 // Create room endpoint
@@ -67,7 +73,7 @@ app.post('/api/create-room', upload.single('roomImage'), verifyToken, async (req
     try {
         console.log("📝 ได้รับข้อมูลสร้างห้อง:", req.body);
         console.log("🖼️ ไฟล์รูปภาพ:", req.file);
-        
+
         const createdBy = req.userId;
         const { title, description, activityDate, location, roomType, password } = req.body;
 
@@ -88,13 +94,13 @@ app.post('/api/create-room', upload.single('roomImage'), verifyToken, async (req
             createdBy: createdBy,
             roomType,
             password: roomType === 'public' ? null : password,
-            roomImage: req.file ? 'uploads/' + req.file.filename : "" 
+            roomImage: req.file ? 'uploads/' + req.file.filename : ""
         });
-        
+
         await newRoom.save();
         console.log(`✅ Room Created: ${newRoom.title} (Image: ${newRoom.roomImage})`);
 
-        io.emit('refresh_room_list'); 
+        io.emit('refresh_room_list');
         res.status(201).json({ success: true, message: 'สร้างห้องสำเร็จ', room: newRoom });
 
     } catch (error) {
@@ -103,30 +109,27 @@ app.post('/api/create-room', upload.single('roomImage'), verifyToken, async (req
     }
 });
 
-// Socket.IO Authentication Middleware (แก้ไขให้ถูกต้อง)
 io.use((socket, next) => {
-    const token = socket.handshake.auth.token;
-    
-    console.log('🔐 Authenticating socket connection...');
-    console.log('📋 Token received:', token ? 'Yes' : 'No');
-    
-    if (!token) {
-        console.log("❌ No token provided");
-        return next(new Error("Authentication error: No token provided"));
-    }
-
     try {
-        const decoded = jwt.verify(token, SECRET_KEY);
-        socket.user = decoded; // ✅ เก็บ user ไว้ใน socket
-        
-        console.log(`✅ Socket authenticated successfully`);
-        console.log(`👤 User ID: ${decoded.id || decoded.userId || decoded._id}`);
-        console.log(`👤 Username: ${decoded.username || 'N/A'}`);
-        
+        let token = socket.handshake.auth?.token;
+
+        if (!token) {
+            console.log("❌ Socket Refused: No Token");
+            return next(new Error("Authentication error: Token required"));
+        }
+
+        if (token.startsWith('Bearer ')) {
+            token = token.slice(7);
+        }
+
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        socket.user = decoded;
+
+        console.log(`✅ Socket Authenticated: ${decoded.username || decoded.id}`);
         next();
     } catch (err) {
-        console.log("❌ Token verification failed:", err.message);
-        return next(new Error("Authentication error: " + err.message));
+        console.error("❌ Socket Auth Error:", err.message);
+        next(new Error("Authentication error"));
     }
 });
 
@@ -148,8 +151,8 @@ io.on('connection', (socket) => {
         try {
             console.log('\n📤 ===== SENDING MESSAGE =====');
             console.log('Data received:', data);
-            
-            const { roomId, message, type ='text' } = data;
+
+            const { roomId, message, type = 'text' } = data;
 
             // ตรวจสอบว่ามี user หรือไม่
             if (!socket.user) {
@@ -158,19 +161,18 @@ io.on('connection', (socket) => {
                 return;
             }
 
-            // ดึง user ID (รองรับหลายรูปแบบ)
+            // ดึง user ID
             const senderId = socket.user.id || socket.user.userId || socket.user._id;
-            
+            const senderName = socket.user.username;
+
             if (!senderId) {
                 console.error("❌ Cannot extract user ID from token");
-                console.error("Token payload:", socket.user);
                 socket.emit('error', { message: 'Invalid user data' });
                 return;
             }
 
             console.log(`👤 Sender ID: ${senderId}`);
             console.log(`🏠 Room ID: ${roomId}`);
-            console.log(`💬 Message: ${message}`);
 
             // สร้างข้อความใหม่
             const newMessage = new Message({
@@ -179,27 +181,50 @@ io.on('connection', (socket) => {
                 message,
                 type: type
             });
-            
+
             await newMessage.save();
             console.log(`✅ Message saved to MongoDB: ${newMessage._id}`);
 
             // Populate sender information
             const messageData = await newMessage.populate('sender', 'username profilePicture');
-            console.log(`📨 Populated message data:`, messageData);
 
-            // Broadcast to room
+            // Broadcast to room (ส่ง Socket ให้คนที่เปิดจออยู่)
             io.to(roomId).emit('receive_message', messageData);
             console.log(`✅ Message broadcast to room ${roomId}`);
+
+            // 1. ดึงข้อมูลห้อง และ "รายชื่อคนในห้อง" (participants)
+            const room = await Room.findById(roomId).populate('participants');
+
+            if (room && room.participants) {
+                console.log(`👥 สมาชิกในห้องมี: ${room.participants.length} คน (รวมคนส่ง)`);
+
+                // 2. วนลูปเช็คสมาชิกทีละคน
+                room.participants.forEach(user => {
+                    const userIdStr = user._id.toString();
+                    const senderIdStr = senderId.toString();
+
+                    if (userIdStr !== senderIdStr && user.fcmToken) {
+
+                        console.log(`📲 กำลังส่งแจ้งเตือนหา: ${user.username}`);
+
+                        firebaseService.sendPushNotification(
+                            user.fcmToken,
+                            `ข้อความใหม่จาก ${room.title}`,
+                            `${senderName}: ${type === 'image' ? 'ส่งรูปภาพ' : message}`,
+                            { roomId: roomId.toString() }
+                        );
+                    }
+                });
+            }
+
             console.log('============================\n');
 
         } catch (error) {
             console.error("\n❌ ===== ERROR SENDING MESSAGE =====");
             console.error("Error:", error);
-            console.error("Stack:", error.stack);
-            console.error("====================================\n");
-            
-            socket.emit('error', { 
-                message: 'Failed to send message: ' + error.message 
+
+            socket.emit('error', {
+                message: 'Failed to send message: ' + error.message
             });
         }
     });
@@ -213,9 +238,9 @@ io.on('connection', (socket) => {
                 socket.emit('error', 'ไม่พบห้องนี้ในระบบ');
                 return;
             }
-            
+
             await Room.findByIdAndDelete(roomId);
-            
+
             if (room.roomImage) {
                 const imagePath = path.join(__dirname, 'uploads', room.roomImage);
                 if (fs.existsSync(imagePath)) fs.unlinkSync(imagePath);
@@ -241,7 +266,7 @@ io.on('connection', (socket) => {
 // Start server
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`\n🚀 ================================`);
-    console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`🚀 Server Updated & Running on port ${PORT}`);
     console.log(`🚀 http://localhost:${PORT}`);
     console.log(`🚀 ================================\n`);
 });

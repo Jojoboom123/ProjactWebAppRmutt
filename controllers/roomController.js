@@ -290,13 +290,13 @@ exports.kickUser = async (req, res) => {
 exports.getRoomMessages = async (req, res) => {
    try {
         const { roomId } = req.params;
-        const { limit = 50, skip = 0 } = req.query; // รองรับ pagination
+        const { limit = 50, skip = 0 } = req.query; 
 
         console.log(`📥 Fetching messages for room: ${roomId}`);
 
         // ดึงข้อความจาก DB โดยเรียงตามเวลา (เก่า -> ใหม่)
         const messages = await Message.find({ roomId })
-            .populate('sender', 'username profilePicture') // ดึงข้อมูล sender
+            .populate('sender', 'username profilePicture') 
             .sort({ createdAt: 1 }) // เรียงจากเก่าไปใหม่
             .limit(parseInt(limit))
             .skip(parseInt(skip));
@@ -338,7 +338,7 @@ exports.getLastestMessage = async (req, res) => {
         res.json({
             success: true,
             count: messages.length,
-            messages: messages.reverse() // กลับด้านเพื่อให้เป็นเก่า -> ใหม่
+            messages: messages.reverse() 
         });
 
     } catch (error) {
@@ -409,4 +409,96 @@ exports.uploadImage = async (req,res) =>{
         console.error("Upload Error:", error);
         res.status(500).json({ success: false, message: 'Upload failed' });
     }
-}
+};
+exports.getUserProfile = async (req, res) => {
+    try {
+        // req.user.id มาจาก verifyToken
+        const userId = req.user ? req.user.id : req.userId;
+        const user = await User.findById(userId).select('-password'); // ไม่ส่ง password กลับไป
+
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'User not found' });
+        }
+
+        res.json({
+            success: true,
+            user: user
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ success: false, message: 'Server Error' });
+    }
+};
+exports.updateRoom = async (req, res) => {
+    try {
+        const roomId = req.params.id;
+        const userId = req.user ? req.user.id : req.userId; // ไอดีคนกดแก้ไข
+        
+        // 1. รับค่าที่ส่งมา
+        const { title, description, password, roomType, location } = req.body;
+
+        // 2. หาห้องก่อน
+        let room = await Room.findById(roomId);
+        if (!room) {
+            return res.status(404).json({ success: false, message: 'ไม่พบห้องแชท' });
+        }
+
+        // 3. 🛡️ เช็คสิทธิ์ 
+        if (room.createdBy.toString() !== userId && req.user.role !== 'admin') {
+            return res.status(403).json({ success: false, message: 'คุณไม่มีสิทธิ์แก้ไขห้องนี้ (ต้องเป็นเจ้าของห้อง)' });
+        }
+
+        // 4. อัปเดตข้อมูล (ถ้ามีการส่งค่ามาใหม่ ก็ใช้ค่าใหม่ ถ้าไม่ส่งมา ก็ใช้ค่าเดิม)
+        room.title = title || room.title;
+        room.description = description || room.description;
+        room.roomType = roomType || room.roomType;
+
+        // จัดการรหัสผ่าน 
+        if (roomType === 'public') {
+            room.password = undefined; // หรือ ""
+        } else if (password) {
+            // ถ้าส่งรหัสมาใหม่ ก็อัปเดต )
+            room.password = password; 
+        }
+
+        // 5. จัดการ Location (ตำแหน่ง)
+        if (location) {
+            if (typeof location === 'string') {
+                try {
+                    room.location = JSON.parse(location);
+                } catch (e) {
+                    console.error("Location parse error:", e);
+                    
+                }
+            } else {
+                room.location = location;
+            }
+        }
+
+        // 6. จัดการรูปภาพ (ถ้ามีการอัปโหลดรูปใหม่มา)
+        if (req.file) {
+            if (room.roomImage && room.roomImage !== "") {
+                const oldPath = path.join(__dirname, '../', room.roomImage); 
+                
+                if (fs.existsSync(oldPath)) {
+                    fs.unlinkSync(oldPath);
+                }
+            }
+            // ใส่รูปใหม่
+            room.roomImage = `uploads/${req.file.filename}`;
+        }
+
+        // 7. บันทึก
+        await room.save();
+
+        res.json({
+            success: true,
+            message: 'แก้ไขห้องสำเร็จ',
+            room: room
+        });
+
+    } catch (error) {
+        console.error("Update Room Error:", error);
+        res.status(500).json({ success: false, message: 'Server Error' });
+    }
+};
