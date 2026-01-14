@@ -22,7 +22,7 @@ const userSchema = new mongoose.Schema({
     profileImage: { type: String, default: "" },
     role: {
         type: String,
-        enum: ['user', 'admin'], // เป็นได้แค่ 2 ค่านี้
+        enum: ['user', 'admin'], 
         default: 'user'
     },
     createdAt: { type: Date, default: Date.now }

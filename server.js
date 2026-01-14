@@ -1,12 +1,12 @@
-const firebaseService = require('./services/firebaseService'); // ✅ เพิ่มบรรทัดนี้
+const firebaseService = require('./services/firebaseService');
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
 const http = require('http');
 const { Server } = require("socket.io");
-const jwt = require('jsonwebtoken'); // ⭐ ต้องมี!
-const multer = require('multer'); 
+const jwt = require('jsonwebtoken');
+const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const Room = require('./models/Room');
@@ -57,9 +57,9 @@ app.use('/api/admin', adminRoutes);
 // Create server and Socket.IO
 const server = http.createServer(app);
 const io = new Server(server, {
-    
-    cors: { 
-        origin: "*", 
+
+    cors: {
+        origin: "*",
         methods: ["GET", "POST"],
         credentials: true
     }
@@ -70,7 +70,7 @@ app.post('/api/create-room', upload.single('roomImage'), verifyToken, async (req
     try {
         console.log("📝 ได้รับข้อมูลสร้างห้อง:", req.body);
         console.log("🖼️ ไฟล์รูปภาพ:", req.file);
-        
+
         const createdBy = req.userId;
         const { title, description, activityDate, location, roomType, password } = req.body;
 
@@ -91,13 +91,13 @@ app.post('/api/create-room', upload.single('roomImage'), verifyToken, async (req
             createdBy: createdBy,
             roomType,
             password: roomType === 'public' ? null : password,
-            roomImage: req.file ? 'uploads/' + req.file.filename : "" 
+            roomImage: req.file ? 'uploads/' + req.file.filename : ""
         });
-        
+
         await newRoom.save();
         console.log(`✅ Room Created: ${newRoom.title} (Image: ${newRoom.roomImage})`);
 
-        io.emit('refresh_room_list'); 
+        io.emit('refresh_room_list');
         res.status(201).json({ success: true, message: 'สร้างห้องสำเร็จ', room: newRoom });
 
     } catch (error) {
@@ -106,12 +106,11 @@ app.post('/api/create-room', upload.single('roomImage'), verifyToken, async (req
     }
 });
 
-// Socket.IO Authentication Middleware (แก้ไขให้ถูกต้อง)
 io.use(async (socket, next) => {
     try {
         // ✅ แก้บรรทัดนี้ครับ: ให้มันหา Token จาก "Auth" หรือ "Headers" ก็ได้
         let token = socket.handshake.auth.token || socket.handshake.headers.token;
-        
+
         // (แถม) เผื่อบางทีส่งมาแบบ 'Bearer <token>' ใน Header ให้ตัดคำว่า Bearer ออก
         if (token && token.startsWith('Bearer ')) {
             token = token.slice(7, token.length);
@@ -125,7 +124,7 @@ io.use(async (socket, next) => {
         // ตรวจสอบความถูกต้องของ Token
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         socket.user = decoded; // เก็บข้อมูล User ไว้ใน Socket
-        
+
         console.log(`✅ Socket Authenticated: ${socket.user.username}`);
         next();
     } catch (error) {
@@ -152,8 +151,8 @@ io.on('connection', (socket) => {
         try {
             console.log('\n📤 ===== SENDING MESSAGE =====');
             console.log('Data received:', data);
-            
-            const { roomId, message, type ='text' } = data;
+
+            const { roomId, message, type = 'text' } = data;
 
             // ตรวจสอบว่ามี user หรือไม่
             if (!socket.user) {
@@ -164,8 +163,8 @@ io.on('connection', (socket) => {
 
             // ดึง user ID
             const senderId = socket.user.id || socket.user.userId || socket.user._id;
-            const senderName = socket.user.username; // ✅ เก็บชื่อคนส่งไว้ใช้แจ้งเตือน
-            
+            const senderName = socket.user.username;
+
             if (!senderId) {
                 console.error("❌ Cannot extract user ID from token");
                 socket.emit('error', { message: 'Invalid user data' });
@@ -182,17 +181,17 @@ io.on('connection', (socket) => {
                 message,
                 type: type
             });
-            
+
             await newMessage.save();
             console.log(`✅ Message saved to MongoDB: ${newMessage._id}`);
 
             // Populate sender information
             const messageData = await newMessage.populate('sender', 'username profilePicture');
-            
+
             // Broadcast to room (ส่ง Socket ให้คนที่เปิดจออยู่)
             io.to(roomId).emit('receive_message', messageData);
             console.log(`✅ Message broadcast to room ${roomId}`);
-            
+
             // 1. ดึงข้อมูลห้อง และ "รายชื่อคนในห้อง" (participants)
             const room = await Room.findById(roomId).populate('participants');
 
@@ -205,14 +204,14 @@ io.on('connection', (socket) => {
                     const senderIdStr = senderId.toString();
 
                     if (userIdStr !== senderIdStr && user.fcmToken) {
-                        
+
                         console.log(`📲 กำลังส่งแจ้งเตือนหา: ${user.username}`);
 
                         firebaseService.sendPushNotification(
-                            user.fcmToken,          
-                            `ข้อความใหม่จาก ${room.title}`, 
+                            user.fcmToken,
+                            `ข้อความใหม่จาก ${room.title}`,
                             `${senderName}: ${type === 'image' ? 'ส่งรูปภาพ' : message}`,
-                            { roomId: roomId.toString() }   
+                            { roomId: roomId.toString() }
                         );
                     }
                 });
@@ -223,9 +222,9 @@ io.on('connection', (socket) => {
         } catch (error) {
             console.error("\n❌ ===== ERROR SENDING MESSAGE =====");
             console.error("Error:", error);
-            
-            socket.emit('error', { 
-                message: 'Failed to send message: ' + error.message 
+
+            socket.emit('error', {
+                message: 'Failed to send message: ' + error.message
             });
         }
     });
@@ -239,9 +238,9 @@ io.on('connection', (socket) => {
                 socket.emit('error', 'ไม่พบห้องนี้ในระบบ');
                 return;
             }
-            
+
             await Room.findByIdAndDelete(roomId);
-            
+
             if (room.roomImage) {
                 const imagePath = path.join(__dirname, 'uploads', room.roomImage);
                 if (fs.existsSync(imagePath)) fs.unlinkSync(imagePath);

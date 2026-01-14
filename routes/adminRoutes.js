@@ -18,7 +18,6 @@ const getStartDate = (type) => {
 // 1. 📊 Dashboard API (ดูภาพรวม รายวัน/เดือน/ปี)
 router.get('/dashboard', verifyToken, verifyAdmin, async (req, res) => {
     try {
-        // นับ User ที่สมัครเข้ามาตามช่วงเวลา
         const [dailyUsers, monthlyUsers, yearlyUsers, totalUsers, totalRooms] = await Promise.all([
             User.countDocuments({ createdAt: { $gte: getStartDate('day') } }),
             User.countDocuments({ createdAt: { $gte: getStartDate('month') } }),

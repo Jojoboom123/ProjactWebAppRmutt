@@ -7,10 +7,9 @@ exports.sendOtp = async (phoneNumber) => {
     // สร้างรหัส 6 หลัก
     const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
 
-    // กำหนดวันหมดอายุ 5 นาที
+    // กำหนดวันหมดอายุ
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
 
-    // บันทึกลง Database (Upsert: ถ้ามีให้แก้ ถ้าไม่มีให้สร้าง)
     await Otp.findOneAndUpdate(
         { phoneNumber: phoneNumber },
         { 
@@ -41,7 +40,6 @@ exports.verifyOtp = async (phoneNumber, code) => {
     // 3. เช็คว่าหมดอายุหรือยัง (กันเหนียว)
     if (record.expiresAt < Date.now()) return { valid: false, message: "รหัส OTP หมดอายุแล้ว" };
 
-    // ถ้าถูกต้อง -> ลบ OTP ทิ้งทันที (ป้องกันการใช้ซ้ำ)
     await Otp.deleteOne({ phoneNumber: phoneNumber });
 
     return { valid: true };

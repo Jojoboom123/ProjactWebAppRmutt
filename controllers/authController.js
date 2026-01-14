@@ -2,7 +2,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const Otp = require('../models/Otp');
-const otpService = require('../services/otpService'); // ✅ ประกาศบรรทัดนี้แค่ครั้งเดียวพอ
+const otpService = require('../services/otpService'); 
 
 const SECRET_KEY = process.env.JWT_SECRET;
 
@@ -88,7 +88,7 @@ exports.login = async (req, res) => {
         }
 
         // สร้าง Token
-        const token = jwt.sign({ id: user._id, username: user.username, role: user.role}, SECRET_KEY, { expiresIn: '365d' }); // แก้ให้อายุนานขึ้นหน่อยก็ได้ครับ
+        const token = jwt.sign({ id: user._id, username: user.username, role: user.role}, SECRET_KEY, { expiresIn: '365d' }); 
         
         res.json({ 
             success: true,
@@ -157,7 +157,6 @@ exports.resetPassword = async (req, res) => {
             return res.status(404).json({ success: false, message: 'ไม่พบผู้ใช้งาน' });
         }  
 
-        // Bcrypt จะทำงานเองใน User Model (pre-save) ถ้ามีการเปลี่ยน password แต่เพื่อความชัวร์ assign ใหม่แบบนี้ได้
         user.password = newPassword;
         await user.save();      
         

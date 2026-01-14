@@ -150,7 +150,7 @@ exports.getJoinedRooms = async (req,res) => {
           pipeline: [
             { $match: { $expr: { $eq: ['$roomId', '$$roomId'] } } },
             { $sort: { createdAt: -1 } }, // เรียงเอาใหม่สุด
-            { $limit: 1 } // เอาแค่อันเดียว
+            { $limit: 1 } 
           ],
           as: 'lastMessageData'
         }
@@ -161,7 +161,7 @@ exports.getJoinedRooms = async (req,res) => {
           lastMessageTime: { $arrayElemAt: ['$lastMessageData.createdAt', 0] } // ดึงเวลาออกมา
         }
       },
-      { $project: { lastMessageData: 0 } } // ลบ temp field ออก
+      { $project: { lastMessageData: 0 } } 
     ]);
 
     res.json({ success: true, data: rooms });

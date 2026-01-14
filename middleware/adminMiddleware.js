@@ -1,7 +1,6 @@
 module.exports = (req, res, next) => {
-    // req.user ได้มาจาก verifyToken ที่เราแก้ตะกี้
     if (req.user && req.user.role === 'admin') {
-        next(); // เป็นแอดมินจริง -> ผ่านไปได้
+        next(); 
     } else {
         res.status(403).json({ 
             success: false, 
