@@ -1,46 +1,66 @@
+const admin = require('firebase-admin');
+const path = require('path');
 
-const admin = require("firebase-admin");
+const serviceAccount = require('./serviceAccountKey.json');
 
-let serviceAccount;
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount)
+});
 
-try {
-    if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-        serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-    } 
-    else {
-        serviceAccount = require("../firebase-key.json");
+console.log("🔥 Firebase Admin Initialized");
+
+//  ฟังก์ชันหลัก: ปรับให้รับค่า token, title, body, data ตรงๆ เพื่อให้ server.js เรียกใช้ง่าย
+exports.sendPushNotification = async (token, title, body, data = {}, options = {}) => {
+  try {
+    if (!token) {
+        console.log('⚠️ No FCM Token provided, skipping notification.');
+        return;
     }
 
-    if (!admin.apps.length) {
-        admin.initializeApp({
-            credential: admin.credential.cert(serviceAccount)
-        });
-        console.log("✅ Firebase Admin Initialized");
+    // แปลง data ทุกตัวเป็น String (Firebase บังคับ)
+    const stringifiedData = Object.fromEntries(
+      Object.entries(data).map(([key, value]) => [
+        key,
+        typeof value === 'string' ? value : JSON.stringify(value)
+      ])
+    );
+
+    const message = {
+      token: token,
+      notification: {
+        title: title,
+        body: body
+      },
+      data: stringifiedData, // ส่ง Data ไปด้วย (เช่น roomId)
+      android: {
+        notification: {
+          sound: 'default',
+          priority: 'high',
+          clickAction: 'FLUTTER_NOTIFICATION_CLICK',
+        }
+      },
+      apns: {
+        payload: {
+          aps: {
+            sound: 'default',
+            badge: 1,
+            contentAvailable: true
+          }
+        }
+      }
+    };
+
+    const response = await admin.messaging().send(message);
+    console.log('✅ Notification sent successfully:', response);
+    return { success: true, messageId: response };
+
+  } catch (error) {
+    console.error('❌ Error sending notification:', error.message);
+    
+    // จัดการกรณี Token หมดอายุ
+    if (error.code === 'messaging/registration-token-not-registered') {
+        return { success: false, error: 'INVALID_TOKEN' };
     }
-} catch (error) {
-    console.error("⚠️ Firebase Warning: ไม่พบ Service Account (ระบบแจ้งเตือนจะไม่ทำงาน)");
-}
-
-exports.sendPushNotification = async (fcmToken, title, body, data = {}) => {
-    try {
-        if (!serviceAccount || !fcmToken) return;
-
-        const message = {
-            token: fcmToken,
-            notification: {
-                title: title,
-                body: body
-            },
-            // data ต้องเป็น String ทั้งหมด (ข้อกำหนดของ Firebase)
-            data: {
-                roomId: data.roomId ? data.roomId.toString() : "",
-                click_action: "FLUTTER_NOTIFICATION_CLICK"
-            }
-        };
-
-        await admin.messaging().send(message);
-        console.log(`🔔 Notification Sent to: ${fcmToken.substring(0, 10)}...`);
-    } catch (error) {
-        console.error("❌ Notification Error:", error.message);
-    }
+    return { success: false, error: error.code };
+  }
 };

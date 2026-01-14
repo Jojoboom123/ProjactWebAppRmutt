@@ -1,10 +1,10 @@
 module.exports = (req, res, next) => {
     if (req.user && req.user.role === 'admin') {
-        next(); 
+        next();
     } else {
-        res.status(403).json({ 
-            success: false, 
-            message: 'Access Denied: สำหรับผู้ดูแลระบบเท่านั้น' 
+        res.status(403).json({
+            success: false,
+            message: 'Access Denied: สำหรับผู้ดูแลระบบเท่านั้น'
         });
     }
 };

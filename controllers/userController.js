@@ -2,26 +2,26 @@ const mongoose = require('mongoose');
 const User = require('../models/User');
 const Room = require('../models/Room');
 const Otp = require('../models/Otp');
-const bcrypt = require('bcryptjs'); 
+const bcrypt = require('bcryptjs');
 const otpService = require('../services/otpService');
 
 exports.updateProfile = async (req, res) => {
     try {
         const userId = req.user ? req.user.id : req.userId;
         const { username } = req.body;
-        
+
         let user = await User.findById(userId);
         if (!user) {
             return res.status(404).json({ success: false, message: 'User not found' });
         }
 
         user.username = username || user.username;
-  
+
         if (req.file) {
             user.profileImage = `uploads/${req.file.filename}`;
         }
 
-        await user.save(); 
+        await user.save();
 
         res.json({
             success: true,
@@ -42,7 +42,7 @@ exports.updateProfile = async (req, res) => {
 exports.changePassword = async (req, res) => {
     try {
         const userId = req.user ? req.user.id : req.userId;
-        const { currentPassword, newPassword ,confirmPassword} = req.body;  
+        const { currentPassword, newPassword, confirmPassword } = req.body;
         let user = await User.findById(userId);
         if (!user) {
             return res.status(404).json({ success: false, message: 'ไม่พบผู้ใช้งาน' });
@@ -56,12 +56,12 @@ exports.changePassword = async (req, res) => {
         }
         const salt = await bcrypt.genSalt(10);
         user.password = await bcrypt.hash(newPassword, salt);
-        await user.save(); 
+        await user.save();
         res.json({ success: true, message: 'เปลี่ยนรหัสผ่านสำเร็จแล้ว!' });
     } catch (error) {
         console.error(error);
         res.status(500).json({ success: false, message: 'Server Error' });
-    }  
+    }
 };
 
 // POST /api/auth/request-change-phone-otp
@@ -136,35 +136,35 @@ exports.verifyAndUpdatePhoneNumber = async (req, res) => {
     }
 };
 
-exports.getJoinedRooms = async (req,res) => {
+exports.getJoinedRooms = async (req, res) => {
     try {
-       const{ userId} = req.user ? req.user : { userId: req.userId };
-    
-    // ใช้ Aggregate เพื่อ Join ข้อมูล
-    const rooms = await Room.aggregate([
-      { $match: { participants: new mongoose.Types.ObjectId(userId) } }, // หาห้องที่มีเรา
-      {
-        $lookup: { // Join กับตาราง Messages
-          from: 'messages',
-          let: { roomId: '$_id' },
-          pipeline: [
-            { $match: { $expr: { $eq: ['$roomId', '$$roomId'] } } },
-            { $sort: { createdAt: -1 } }, // เรียงเอาใหม่สุด
-            { $limit: 1 } 
-          ],
-          as: 'lastMessageData'
-        }
-      },
-      {
-        $addFields: {
-          lastMessage: { $arrayElemAt: ['$lastMessageData.message', 0] }, // ดึงข้อความออกมา
-          lastMessageTime: { $arrayElemAt: ['$lastMessageData.createdAt', 0] } // ดึงเวลาออกมา
-        }
-      },
-      { $project: { lastMessageData: 0 } } 
-    ]);
+        const userId = req.user ? req.user : { userId: req.userId };
 
-    res.json({ success: true, data: rooms });
+        // ใช้ Aggregate เพื่อ Join ข้อมูล
+        const rooms = await Room.aggregate([
+            { $match: { participants: new mongoose.Types.ObjectId(userId) } }, // หาห้องที่มีเรา
+            {
+                $lookup: { // Join กับตาราง Messages
+                    from: 'messages',
+                    let: { roomId: '$_id' },
+                    pipeline: [
+                        { $match: { $expr: { $eq: ['$roomId', '$$roomId'] } } },
+                        { $sort: { createdAt: -1 } }, // เรียงเอาใหม่สุด
+                        { $limit: 1 }
+                    ],
+                    as: 'lastMessageData'
+                }
+            },
+            {
+                $addFields: {
+                    lastMessage: { $arrayElemAt: ['$lastMessageData.message', 0] }, // ดึงข้อความออกมา
+                    lastMessageTime: { $arrayElemAt: ['$lastMessageData.createdAt', 0] } // ดึงเวลาออกมา
+                }
+            },
+            { $project: { lastMessageData: 0 } }
+        ]);
+
+        res.json({ success: true, data: rooms });
     } catch (error) {
         console.error(error);
         res.status(500).json({ success: false, message: 'Server Error' });
@@ -173,20 +173,20 @@ exports.getJoinedRooms = async (req,res) => {
 
 
 exports.updateRadius = async (req, res) => {
-    try{
+    try {
         const userId = req.user ? req.user.id : req.userId;
         const { radius } = req.body;
         let user = await User.findById(userId);
         if (!user) {
             return res.status(404).json({ success: false, message: 'User not found' });
-        }   
+        }
         user.radius = radius || user.radius;
         await user.save();
-        res.json({ success: true, message: 'อัปเดตระยะทางสำเร็จ!', radius: user.radius }); 
+        res.json({ success: true, message: 'อัปเดตระยะทางสำเร็จ!', radius: user.radius });
     } catch (error) {
         console.error(error);
         res.status(500).json({ success: false, message: 'Server Error' });
-        
+
     }
 };
 exports.updateFcmToken = async (req, res) => {

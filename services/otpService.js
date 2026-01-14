@@ -37,7 +37,7 @@ exports.verifyOtp = async (phoneNumber, code) => {
     // 2. เช็คว่ารหัสตรงกันไหม
     if (record.otp !== code) return { valid: false, message: "รหัส OTP ไม่ถูกต้อง" };
 
-    // 3. เช็คว่าหมดอายุหรือยัง (กันเหนียว)
+    // 3. เช็คว่าหมดอายุหรือยัง 
     if (record.expiresAt < Date.now()) return { valid: false, message: "รหัส OTP หมดอายุแล้ว" };
 
     await Otp.deleteOne({ phoneNumber: phoneNumber });

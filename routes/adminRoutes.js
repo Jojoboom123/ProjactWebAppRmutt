@@ -1,15 +1,15 @@
 // routes/adminRoutes.js
 const express = require('express');
 const router = express.Router();
-const User = require('../models/User'); 
-const Room = require('../models/Room'); 
-const verifyToken = require('../middleware/authMiddleware'); 
+const User = require('../models/User');
+const Room = require('../models/Room');
+const verifyToken = require('../middleware/authMiddleware');
 const verifyAdmin = require('../middleware/adminMiddleware');
 
 // ✅ ฟังก์ชันช่วยคำนวณวันเริ่มต้น
 const getStartDate = (type) => {
     const now = new Date();
-    if (type === 'day') return new Date(now.setHours(0,0,0,0));
+    if (type === 'day') return new Date(now.setHours(0, 0, 0, 0));
     if (type === 'month') return new Date(now.getFullYear(), now.getMonth(), 1);
     if (type === 'year') return new Date(now.getFullYear(), 0, 1);
     return new Date(0); // ตลอดกาล
@@ -48,7 +48,7 @@ router.get('/dashboard', verifyToken, verifyAdmin, async (req, res) => {
 // 2. 👥 ดูข้อมูล User ทั้งหมด
 router.get('/users', verifyToken, verifyAdmin, async (req, res) => {
     try {
-        const users = await User.find().select('-password'); // ไม่ส่งรหัสผ่านกลับไป
+        const users = await User.find().select('-password');
         res.json(users);
     } catch (error) {
         res.status(500).json({ message: error.message });

@@ -19,6 +19,9 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const verifyToken = require('./middleware/authMiddleware');
 
+const notificationRoutes = require('./routes/notificationRoutes');
+
+app.use('/api/notifications', notificationRoutes);
 app.use(express.json());
 app.use(cors());
 app.use('/uploads', express.static('uploads'));
@@ -56,7 +59,6 @@ app.use('/api/admin', adminRoutes);
 app.get('/', (req, res) => {
     res.send('Server is running normally! 🚀');
 });
-// Create server and Socket.IO
 const server = http.createServer(app);
 const io = new Server(server, {
     path: "/socket.io",
@@ -65,7 +67,7 @@ const io = new Server(server, {
         methods: ["GET", "POST"],
         credentials: true,
     },
-    transports: ["websocket"], 
+    transports: ["websocket"],
 });
 
 // Create room endpoint
@@ -74,28 +76,39 @@ app.post('/api/create-room', upload.single('roomImage'), verifyToken, async (req
         console.log("📝 ได้รับข้อมูลสร้างห้อง:", req.body);
         console.log("🖼️ ไฟล์รูปภาพ:", req.file);
 
-        const createdBy = req.userId;
-        const { title, description, activityDate, location, roomType, password } = req.body;
-
-        let parsedLocation = location;
-        if (typeof location === 'string') {
-            try {
-                parsedLocation = JSON.parse(location);
-            } catch (e) {
-                return res.status(400).json({ message: 'Location format invalid (must be JSON string)' });
-            }
+        // ดึงค่าจาก Body (ส่งแบบ FormData ค่าทั้งหมดจะเป็น String ต้องระวัง)
+        const { title, description, lat, lng, address, activityDate, password, roomType, maxParticipants } = req.body;
+       
+        // Validate ข้อมูลบังคับ
+        if (!title || !lat || !lng || !activityDate) {
+             return res.status(400).json({ 
+                 success: false, 
+                 message: 'กรุณากรอกข้อมูลให้ครบ (ชื่อห้อง, พิกัด, วันเวลานัดหมาย)' 
+             });
         }
-
+       
         const newRoom = new Room({
             title,
             description,
+            
+            // ✅ จัด Format Location ให้ตรงกับ Schema (GeoJSON)
+            location: { 
+                type: 'Point', 
+                // สำคัญ: ต้องเป็น [lng, lat] และต้องเป็นตัวเลข (Float)
+                coordinates: [parseFloat(lng), parseFloat(lat)], 
+                address: address || ""
+            },
+            
             activityDate,
-            location: parsedLocation,
-            createdBy: createdBy,
-            roomType,
-            password: roomType === 'public' ? null : password,
-            roomImage: req.file ? 'uploads/' + req.file.filename : ""
-        });
+            password: password || null, 
+            roomType: roomType || 'public',
+            maxParticipants: parseInt(maxParticipants) || 10, // แปลงเป็น int กันเหนียว
+            createdBy: req.userId,
+            participants: [req.userId], // คนสร้างต้องเป็นสมาชิกคนแรกเสมอ
+            
+            // ✅ ใส่ path 'uploads/' เพื่อให้ Frontend เรียกใช้ง่ายๆ
+            roomImage: req.file ? 'uploads/' + req.file.filename : "" 
+        }); // 👈 ของเดิมลืมปิดตรงนี้ครับ
 
         await newRoom.save();
         console.log(`✅ Room Created: ${newRoom.title} (Image: ${newRoom.roomImage})`);
@@ -111,8 +124,9 @@ app.post('/api/create-room', upload.single('roomImage'), verifyToken, async (req
 
 io.use((socket, next) => {
     try {
-        let token = socket.handshake.auth?.token;
-
+        let token = socket.handshake.auth?.token ||
+            socket.handshake.query?.token ||
+            socket.handshake.headers?.token;
         if (!token) {
             console.log("❌ Socket Refused: No Token");
             return next(new Error("Authentication error: Token required"));
@@ -192,6 +206,7 @@ io.on('connection', (socket) => {
             io.to(roomId).emit('receive_message', messageData);
             console.log(`✅ Message broadcast to room ${roomId}`);
 
+
             // 1. ดึงข้อมูลห้อง และ "รายชื่อคนในห้อง" (participants)
             const room = await Room.findById(roomId).populate('participants');
 
@@ -199,20 +214,35 @@ io.on('connection', (socket) => {
                 console.log(`👥 สมาชิกในห้องมี: ${room.participants.length} คน (รวมคนส่ง)`);
 
                 // 2. วนลูปเช็คสมาชิกทีละคน
-                room.participants.forEach(user => {
+                room.participants.forEach(async (user) => {
                     const userIdStr = user._id.toString();
                     const senderIdStr = senderId.toString();
 
-                    if (userIdStr !== senderIdStr && user.fcmToken) {
-
-                        console.log(`📲 กำลังส่งแจ้งเตือนหา: ${user.username}`);
-
-                        firebaseService.sendPushNotification(
-                            user.fcmToken,
-                            `ข้อความใหม่จาก ${room.title}`,
-                            `${senderName}: ${type === 'image' ? 'ส่งรูปภาพ' : message}`,
-                            { roomId: roomId.toString() }
-                        );
+                    // ไม่ส่งหาตัวเอง
+                    if (userIdStr !== senderIdStr) {
+                        // A. ยิง Push Notification (เฉพาะคนที่มี Token)
+                        if (user.fcmToken) {
+                            console.log(`📲 กำลังส่งแจ้งเตือนหา: ${user.username}`);
+                            firebaseService.sendPushNotification(
+                                user.fcmToken,
+                                `ข้อความใหม่จาก ${room.title}`,
+                                `${senderName}: ${type === 'image' ? 'ส่งรูปภาพ' : message}`,
+                                { roomId: roomId.toString() }
+                            ).catch(err => console.error('Push Error:', err.message));
+                        }
+                        try {
+                            await Notification.create({
+                                recipient: user._id,
+                                sender: senderId,
+                                title: `ข้อความใหม่จาก ${room.title}`,
+                                body: `${senderName}: ${type === 'image' ? 'ส่งรูปภาพ' : message}`,
+                                type: 'new_message',
+                                data: { roomId: roomId.toString() }
+                            });
+                            console.log(`📝 บันทึกแจ้งเตือนให้ ${user.username} แล้ว`);
+                        } catch (err) {
+                            console.error('Save notification error:', err);
+                        }
                     }
                 });
             }
