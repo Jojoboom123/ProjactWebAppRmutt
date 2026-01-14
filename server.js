@@ -95,7 +95,7 @@ app.post('/api/create-room', upload.single('roomImage'), verifyToken, async (req
             location: parsedLocation,
             createdBy: createdBy,
             roomType,
-            participants: [createdBy],
+            participants: [{createdBy}],
             password: roomType === 'public' ? null : password,
             roomImage: req.file ? 'uploads/' + req.file.filename : "" 
         });
