@@ -3,7 +3,6 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const Otp = require('../models/Otp');
 const otpService = require('../services/otpService');
-const otpService = require('../services/otpService');
 
 const SECRET_KEY = process.env.JWT_SECRET;
 
@@ -51,15 +50,9 @@ exports.register = async (req, res) => {
         const otpValidation = await otpService.verifyOtp(phoneNumber, otp);
         if (!otpValidation.valid) {
             return res.status(400).json({ success: false, message: otpValidation.message });
-        const otpValidation = await otpService.verifyOtp(phoneNumber, otp);
-        if (!otpValidation.valid) {
-            return res.status(400).json({ success: false, message: otpValidation.message });
         }
 
-        const existingPhone = await User.findOne({ phoneNumber });
-        if (existingPhone) {
-            return res.status(400).json({ success: false, message: 'เบอร์โทรศัพท์นี้ถูกใช้งานแล้ว' });
-        }
+        
 
         const newUser = new User({ 
             username, 
@@ -78,7 +71,7 @@ exports.register = async (req, res) => {
         console.error(error);
         res.status(500).json({ success: false, message: 'Server Error' });
     }
-};
+}
 // (Login)
 exports.login = async (req, res) => {
     try {
@@ -109,7 +102,7 @@ exports.login = async (req, res) => {
                 username: user.username,
                 phoneNumber: user.phoneNumber,
                 profileImage: user.profileImage,
-                radius: user.radius
+                radius: user.radius,
                 profileImage: user.profileImage,
                 radius: user.radius
             }
@@ -237,4 +230,3 @@ exports.resetPassword = async (req, res) => {
         res.status(500).json({ success: false, message: 'Server Error' });
     }   
     }   
-};

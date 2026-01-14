@@ -1,4 +1,4 @@
-const Otp = require('../models/Otp'); // เรียก Model Otp
+const Otp = require('../models/Otp')
 const axios = require('axios'); // สมมติว่าใช้ axios ยิง SMS Gateway
 
 // ฟังก์ชันสร้างและส่ง OTP
@@ -48,8 +48,7 @@ exports.verifyOtp = async (phoneNumber, code) => {
 
     return { valid: true };
 };
-const Otp = require('../models/Otp');
-const axios = require('axios'); 
+
 
 exports.sendOtp = async (phoneNumber) => {
     
