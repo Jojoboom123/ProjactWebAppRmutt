@@ -2,7 +2,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const Otp = require('../models/Otp');
-const otpService = require('../services/otpService'); 
+const otpService = require('../services/otpService');
 
 const SECRET_KEY = process.env.JWT_SECRET;
 
@@ -11,13 +11,13 @@ exports.requestOtp = async (req, res) => {
     try {
         const { phoneNumber } = req.body;
         console.log('req.body =', req.body);
-        
+
         if (!phoneNumber) {
             return res.status(400).json({ success: false, message: 'กรุณากรอกเบอร์โทรศัพท์' });
         }
 
         await otpService.sendOtp(phoneNumber);
-        
+
         res.json({ success: true, message: 'ส่ง OTP (จำลอง) แล้ว ดูรหัสที่หน้าจอ Console' });
 
     } catch (error) {
@@ -30,7 +30,7 @@ exports.requestOtp = async (req, res) => {
 exports.register = async (req, res) => {
     try {
         const { username, phoneNumber, password, confirmPassword, otp } = req.body;
-        
+
         if (!username || !phoneNumber || !password || !confirmPassword || !otp) {
             return res.status(400).json({ success: false, message: 'กรุณากรอกข้อมูลให้ครบถ้วน' });
         }
@@ -38,7 +38,7 @@ exports.register = async (req, res) => {
         if (password !== confirmPassword) {
             return res.status(400).json({ success: false, message: 'รหัสผ่านไม่ตรงกัน' });
         }
-        
+
         // ตรวจสอบ OTP
         const otpValidation = await otpService.verifyOtp(phoneNumber, otp);
         if (!otpValidation.valid) {
@@ -50,13 +50,14 @@ exports.register = async (req, res) => {
             return res.status(400).json({ success: false, message: 'เบอร์โทรศัพท์นี้ถูกใช้งานแล้ว' });
         }
 
-        const newUser = new User({ 
-            username, 
-            password, 
+        const newUser = new User({
+            username,
+            password,
             phoneNumber,
+            fcmToken: fcmToken || null
         });
 
-        await newUser.save(); 
+        await newUser.save();
 
         await Otp.deleteOne({ phoneNumber }); // ลบ OTP ทิ้งเมื่อสมัครเสร็จ
 
@@ -86,15 +87,19 @@ exports.login = async (req, res) => {
         if (!isMatch) {
             return res.status(400).json({ success: false, message: 'เบอร์โทรศัพท์หรือรหัสผ่านไม่ถูกต้อง' });
         }
-
+        if (fcmToken) {
+            user.fcmToken = fcmToken;
+            await user.save();
+            console.log(`📲 อัปเดต FCM Token ให้ user: ${user.username} แล้ว`);
+        }
         // สร้าง Token
-        const token = jwt.sign({ id: user._id, username: user.username, role: user.role}, SECRET_KEY, { expiresIn: '365d' }); 
-        
-        res.json({ 
+        const token = jwt.sign({ id: user._id, username: user.username, role: user.role }, SECRET_KEY, { expiresIn: '365d' });
+
+        res.json({
             success: true,
-            message: 'เข้าสู่ระบบสำเร็จ', 
+            message: 'เข้าสู่ระบบสำเร็จ',
             token,
-            user: { 
+            user: {
                 id: user._id,
                 username: user.username,
                 phoneNumber: user.phoneNumber,
@@ -105,7 +110,7 @@ exports.login = async (req, res) => {
         });
 
     } catch (error) {
-        console.error(error); 
+        console.error(error);
         res.status(500).json({ success: false, message: 'Server Error' });
     }
 };
@@ -113,7 +118,7 @@ exports.login = async (req, res) => {
 exports.checkPhoneNumber = async (req, res) => {
     try {
         const { phoneNumber } = req.body;
-        
+
         if (!phoneNumber) {
             return res.status(400).json({ success: false, message: 'กรุณากรอกเบอร์โทรศัพท์' });
         }
@@ -121,16 +126,16 @@ exports.checkPhoneNumber = async (req, res) => {
         const user = await User.findOne({ phoneNumber });
 
         if (user) {
-            return res.status(200).json({ 
-                success: true, 
-                exists: true, 
-                message: 'พบเบอร์โทรศัพท์ในระบบ' 
+            return res.status(200).json({
+                success: true,
+                exists: true,
+                message: 'พบเบอร์โทรศัพท์ในระบบ'
             });
         } else {
-            return res.status(200).json({ 
-                success: true, 
-                exists: false, 
-                message: 'ไม่พบเบอร์โทรศัพท์ในระบบ' 
+            return res.status(200).json({
+                success: true,
+                exists: false,
+                message: 'ไม่พบเบอร์โทรศัพท์ในระบบ'
             });
         }
 
@@ -151,20 +156,20 @@ exports.resetPassword = async (req, res) => {
         if (newPassword !== confirmPassword) {
             return res.status(400).json({ success: false, message: 'รหัสผ่านไม่ตรงกัน' });
         }
-        
+
         const user = await User.findOne({ phoneNumber });
         if (!user) {
             return res.status(404).json({ success: false, message: 'ไม่พบผู้ใช้งาน' });
-        }  
+        }
 
         user.password = newPassword;
-        await user.save();      
-        
+        await user.save();
+
         res.json({ success: true, message: 'รีเซ็ตรหัสผ่านสำเร็จ!' });
-    } catch (error) { 
+    } catch (error) {
         console.error(error);
         res.status(500).json({ success: false, message: 'Server Error' });
-    }   
+    }
 };
 
 exports.logout = async (req, res) => {
@@ -175,9 +180,9 @@ exports.logout = async (req, res) => {
         // ลบ fcmToken ออกจาก User คนนั้น (ตั้งเป็น null หรือ "")
         await User.findByIdAndUpdate(userId, { fcmToken: null });
 
-        res.json({ 
-            success: true, 
-            message: 'ออกจากระบบสำเร็จ (หยุดการแจ้งเตือนแล้ว)' 
+        res.json({
+            success: true,
+            message: 'ออกจากระบบสำเร็จ (หยุดการแจ้งเตือนแล้ว)'
         });
 
     } catch (error) {
