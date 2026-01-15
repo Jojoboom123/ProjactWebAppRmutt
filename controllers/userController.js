@@ -43,21 +43,29 @@ exports.changePassword = async (req, res) => {
     try {
         const userId = req.user ? req.user.id : req.userId;
         const { currentPassword, newPassword, confirmPassword } = req.body;
+
         let user = await User.findById(userId);
         if (!user) {
             return res.status(404).json({ success: false, message: 'ไม่พบผู้ใช้งาน' });
         }
+
+        // เช็คว่ารหัสผ่านเก่าถูกต้องไหม
         const isMatch = await bcrypt.compare(currentPassword, user.password);
         if (!isMatch) {
             return res.status(400).json({ success: false, message: 'รหัสผ่านปัจจุบันไม่ถูกต้อง' });
         }
+
+        // เช็คว่ารหัสใหม่ตรงกันไหม
         if (newPassword !== confirmPassword) {
             return res.status(400).json({ success: false, message: 'รหัสผ่านใหม่และยืนยันรหัสผ่านไม่ตรงกัน' });
         }
-        const salt = await bcrypt.genSalt(10);
-        user.password = await bcrypt.hash(newPassword, salt);
-        await user.save();
+
+        user.password = newPassword; 
+        
+        await user.save(); // Model จะทำการ Hash ให้ตรงนี้
+
         res.json({ success: true, message: 'เปลี่ยนรหัสผ่านสำเร็จแล้ว!' });
+
     } catch (error) {
         console.error(error);
         res.status(500).json({ success: false, message: 'Server Error' });
