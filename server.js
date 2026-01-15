@@ -17,6 +17,7 @@ const authRoutes = require('./routes/authRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const app = express();
 const PORT = process.env.PORT || 3000;
+
 const verifyToken = require('./middleware/authMiddleware');
 const Notification = require('./models/Notification');
 const notificationRoutes = require('./routes/notificationRoutes');
@@ -79,7 +80,7 @@ app.post('/api/create-room', upload.single('roomImage'), verifyToken, async (req
         const createdBy = req.userId;
         const { title, description, activityDate, location, roomType, password } = req.body;
 
-        const userObjectId = new mongoose.Types.ObjectId(userIdStr);
+        const userObjectId = new mongoose.Types.ObjectId(createdBy);
         let parsedLocation = location;
         if (typeof location === 'string') {
             try {
