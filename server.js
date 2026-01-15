@@ -79,6 +79,7 @@ app.post('/api/create-room', upload.single('roomImage'), verifyToken, async (req
         const createdBy = req.userId;
         const { title, description, activityDate, location, roomType, password } = req.body;
 
+        const userObjectId = new mongoose.Types.ObjectId(userIdStr);
         let parsedLocation = location;
         if (typeof location === 'string') {
             try {
@@ -95,13 +96,14 @@ app.post('/api/create-room', upload.single('roomImage'), verifyToken, async (req
             location: parsedLocation,
             createdBy: createdBy,
             roomType,
-            participants: [{createdBy}],
+            participants: [userObjectId],
             password: roomType === 'public' ? null : password,
             roomImage: req.file ? 'uploads/' + req.file.filename : "" 
         });
         
         await newRoom.save();
-        console.log(`✅ Room Created: ${newRoom.title} (Image: ${newRoom.roomImage})`);
+        console.log(`Room Created: ${newRoom.title} (Image: ${newRoom.roomImage})`);
+
         io.emit('refresh_room_list'); 
         res.status(201).json({ success: true, message: 'สร้างห้องสำเร็จ', room: newRoom });
 
