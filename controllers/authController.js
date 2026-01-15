@@ -54,7 +54,6 @@ exports.register = async (req, res) => {
             username,
             password,
             phoneNumber,
-            fcmToken: fcmToken || null
         });
 
         await newUser.save();
