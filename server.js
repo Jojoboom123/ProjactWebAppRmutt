@@ -18,7 +18,7 @@ const adminRoutes = require('./routes/adminRoutes');
 const app = express();
 const PORT = process.env.PORT || 3000;
 const verifyToken = require('./middleware/authMiddleware');
-
+const Notification = require('./models/Notification');
 const notificationRoutes = require('./routes/notificationRoutes');
 
 app.use('/api/notifications', notificationRoutes);
