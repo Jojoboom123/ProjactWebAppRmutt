@@ -87,11 +87,6 @@ exports.login = async (req, res) => {
         if (!isMatch) {
             return res.status(400).json({ success: false, message: 'เบอร์โทรศัพท์หรือรหัสผ่านไม่ถูกต้อง' });
         }
-        if (fcmToken) {
-            user.fcmToken = fcmToken;
-            await user.save();
-            console.log(`📲 อัปเดต FCM Token ให้ user: ${user.username} แล้ว`);
-        }
         // สร้าง Token
         const token = jwt.sign({ id: user._id, username: user.username, role: user.role }, SECRET_KEY, { expiresIn: '365d' });
 
