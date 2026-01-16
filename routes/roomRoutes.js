@@ -29,4 +29,5 @@ router.get('/:roomId/lastest', verifyToken, roomController.getLastestMessage);
 router.post('/:roomId/leave', verifyToken, roomController.leaveRoom);
 router.post('/:roomId/report', verifyToken, roomController.reportMessage);
 router.post('/upload', verifyToken, upload.single('image'), roomController.uploadImage);
+router.get('/:roomId/reports', verifyToken, roomController.getRoomReports);
 module.exports = router;

@@ -502,3 +502,38 @@ exports.updateRoom = async (req, res) => {
         res.status(500).json({ success: false, message: 'Server Error' });
     }
 };
+
+exports.getRoomReports = async (req, res) => {
+    try {
+        const { roomId } = req.params;
+        const userId = req.userId; // ได้มาจาก verifyToken
+
+        // 1. หาห้องก่อน เพื่อเช็คว่าเป็นเจ้าของจริงไหม
+        const room = await Room.findById(roomId);
+        if (!room) {
+            return res.status(404).json({ success: false, message: 'ไม่พบห้องแชท' });
+        }
+
+        // 2. เช็ค: คนเรียก api เป็น "เจ้าของห้อง" หรือไม่?
+        if (room.owner.toString() !== userId) {
+            return res.status(403).json({ success: false, message: 'คุณไม่ใช่เจ้าของห้องนี้ ไม่มีสิทธิ์ดูรายงาน' });
+        }
+
+        // 3. ดึง Report ทั้งหมดของห้องนี้
+        const reports = await Report.find({ roomId: roomId })
+            .select('-status -__v') // ✂️ ตัด status และ __v ทิ้งตามที่ขอ
+            .populate('reportedUser', 'username profileImage') // ดึงรูป/ชื่อ คนโดนรีพอร์ต
+            .populate('reporterUser', 'username profileImage') // ดึงรูป/ชื่อ คนแจ้ง
+            .sort({ createdAt: -1 });
+
+        res.status(200).json({
+            success: true,
+            count: reports.length,
+            data: reports
+        });
+
+    } catch (error) {
+        console.error('Error fetching room reports:', error);
+        res.status(500).json({ success: false, message: 'Server Error' });
+    }
+}

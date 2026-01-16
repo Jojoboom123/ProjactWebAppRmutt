@@ -2,14 +2,12 @@ const mongoose = require('mongoose');
 
 const notificationSchema = new mongoose.Schema({
   
-  // ✅ เปลี่ยนเป็น recipient (คนรับ) เชื่อมกับ User model
   recipient: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: true
   },
   
-  // ✅ เพิ่ม sender (คนส่ง) เผื่ออยากรู้ว่าใครทักมา
   sender: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
