@@ -508,14 +508,13 @@ exports.getRoomReports = async (req, res) => {
         const { roomId } = req.params;
         const userId = req.userId; // ได้มาจาก verifyToken
 
-        // 1. หาห้องก่อน เพื่อเช็คว่าเป็นเจ้าของจริงไหม
+       
         const room = await Room.findById(roomId);
         if (!room) {
             return res.status(404).json({ success: false, message: 'ไม่พบห้องแชท' });
         }
 
-        // 2. เช็ค: คนเรียก api เป็น "เจ้าของห้อง" หรือไม่?
-        if (room.owner.toString() !== userId) {
+        if (room.createdBy.toString() !== userId) {
             return res.status(403).json({ success: false, message: 'คุณไม่ใช่เจ้าของห้องนี้ ไม่มีสิทธิ์ดูรายงาน' });
         }
 
