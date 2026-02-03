@@ -53,22 +53,25 @@ exports.createRoom = async (req, res) => {
 
 exports.getAllRooms = async (req, res) => {
     try {
-        let { lat, lng, radius } = req.query;
+        // 1. รับแค่ lat, lng (radius ไม่ต้องใช้แล้ว แต่รับเผื่อไว้ไม่ให้ error)
+        let { lat, lng } = req.query;
 
         let rooms;
 
-        if (lat && lng && radius) {
-           
+        // 2. เช็คแค่ว่ามีพิกัดส่งมาไหม (ไม่ต้องเช็ค radius)
+        if (lat && lng) {
+            
             const userLat = parseFloat(lat);
             const userLng = parseFloat(lng);
-            const searchRadius = parseFloat(radius) * 1000; 
+
+            const FIXED_RADIUS_METERS = 2000; 
 
             rooms = await Room.aggregate([
                 {
                     $geoNear: {
                         near: { type: "Point", coordinates: [userLng, userLat] },
-                        distanceField: "distanceFromMe", //สำหรับบอกระยะห่างห้องถ้าส่งพิกัดมา
-                        maxDistance: searchRadius,
+                        distanceField: "distanceFromMe", 
+                        maxDistance: FIXED_RADIUS_METERS, 
                         spherical: true,
                         distanceMultiplier: 1 
                     }
@@ -78,15 +81,14 @@ exports.getAllRooms = async (req, res) => {
                 }
             ]);
 
-            
-            await Room.populate(rooms, { path: 'createdBy', select: 'username firstName profilePicture' });
-            await Room.populate(rooms, { path: 'participants', select: 'username firstName profilePicture' });
+            // ✅ แก้ profilePicture -> profileImage ให้ตรงกับ User Model
+            await Room.populate(rooms, { path: 'createdBy', select: 'username firstName profileImage' });
+            await Room.populate(rooms, { path: 'participants', select: 'username firstName profileImage' });
 
         } else {
-            //สำหรับค้นหาห้องทั้งหมดถ้าไม่ส่งพิกัดมา
             rooms = await Room.find({})
-                .populate('createdBy', 'username firstName profilePicture')
-                .populate('participants', 'username firstName profilePicture')
+                .populate('createdBy', 'username firstName profileImage') // ✅ แก้ตรงนี้ด้วย
+                .populate('participants', 'username firstName profileImage') // ✅ แก้ตรงนี้ด้วย
                 .sort({ createdAt: -1 })
                 .lean();
         }
@@ -99,14 +101,9 @@ exports.getAllRooms = async (req, res) => {
 
     } catch (error) {
         console.error(error);
-        res.status(500).json({ 
-            success: false, 
-            message: 'Server Error', 
-            error: error.message 
-        });
+        res.status(500).json({ success: false, message: 'Server Error' });
     }
 };
-
 
 exports.joinPublicRoom = async (req, res) => {
     try {

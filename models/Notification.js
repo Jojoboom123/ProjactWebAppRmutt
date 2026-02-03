@@ -25,7 +25,6 @@ const notificationSchema = new mongoose.Schema({
     trim: true
   },
 
-  // ✅ ปรับประเภทให้เหมาะกับแอพแชท
   type: {
     type: String,
     enum: ['new_message', 'room_invite', 'system_alert', 'general'],
