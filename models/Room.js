@@ -1,8 +1,8 @@
 const mongoose = require('mongoose');
-const bcrypt = require('bcrypt');
 
 const roomSchema = new mongoose.Schema({
     title: { type: String, required: true },
+    Tag: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Tag' }],
     description: { type: String, default: "" },
     roomImage: { type: String, default: "" },
     roomType: {
@@ -10,9 +10,7 @@ const roomSchema = new mongoose.Schema({
         enum: ['public', 'private'],
         default: 'public'
     },
-
     password: { type: String, default: null },
-
 
     maxParticipants: {
         type: Number,
@@ -44,15 +42,5 @@ const roomSchema = new mongoose.Schema({
     createdAt: { type: Date, default: Date.now }
 });
 roomSchema.index({ location: '2dsphere' });
-roomSchema.pre('save', async function () {
-    if (!this.isModified('password') || !this.password) return;
-
-    const salt = await bcrypt.genSalt(10);
-    this.password = await bcrypt.hash(this.password, salt);
-});
-
-roomSchema.methods.comparePassword = async function (enteredPassword) {
-    return await bcrypt.compare(enteredPassword, this.password);
-};
 
 module.exports = mongoose.model('Room', roomSchema);

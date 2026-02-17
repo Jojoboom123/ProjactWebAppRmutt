@@ -6,7 +6,7 @@ const Report = require('../models/Reports');
 exports.createRoom = async (req, res) => {
     try {
       
-        const { title, description, lat, lng, address, activityDate, password, roomType, maxParticipants } = req.body;
+        const { title, description, lat, lng, address, activityDate, password, roomType, maxParticipants, tags } = req.body;
 
         if (!title || !lat || !lng || !activityDate) {
              return res.status(400).json({ 
@@ -14,7 +14,14 @@ exports.createRoom = async (req, res) => {
                  message: 'กรุณากรอกข้อมูลให้ครบ (ชื่อห้อง, พิกัด, วันเวลานัดหมาย)' 
              });
         }
-
+        let parsedTags = [];
+                if (tags) {
+                    try {
+                        parsedTags = typeof tags === 'string' ? JSON.parse(tags) : tags;
+                    } catch (e) {
+                        console.error("Tags parse error");
+                    }
+                }
         const newRoom = new Room({
             title,
             description,
@@ -27,7 +34,8 @@ exports.createRoom = async (req, res) => {
             activityDate,
             password: password || null, 
             roomType: roomType || 'public',
-            maxParticipants: maxParticipants || 10, 
+            maxParticipants: maxParticipants || 10,
+            tags: parsedTags, 
             createdBy: req.userId,
             participants: [req.userId],
             roomImage: req.file ? req.file.filename : "" 
@@ -53,17 +61,12 @@ exports.createRoom = async (req, res) => {
 
 exports.getAllRooms = async (req, res) => {
     try {
-        // 1. รับแค่ lat, lng (radius ไม่ต้องใช้แล้ว แต่รับเผื่อไว้ไม่ให้ error)
         let { lat, lng } = req.query;
-
         let rooms;
 
-        // 2. เช็คแค่ว่ามีพิกัดส่งมาไหม (ไม่ต้องเช็ค radius)
         if (lat && lng) {
-            
             const userLat = parseFloat(lat);
             const userLng = parseFloat(lng);
-
             const FIXED_RADIUS_METERS = 2000; 
 
             rooms = await Room.aggregate([
@@ -81,14 +84,17 @@ exports.getAllRooms = async (req, res) => {
                 }
             ]);
 
-            // ✅ แก้ profilePicture -> profileImage ให้ตรงกับ User Model
+            // ✅ แบบที่ 1: การ populate เมื่อใช้ aggregate (เขียนแยกบรรทัดกัน)
             await Room.populate(rooms, { path: 'createdBy', select: 'username firstName profileImage' });
             await Room.populate(rooms, { path: 'participants', select: 'username firstName profileImage' });
+            await Room.populate(rooms, { path: 'tags', select: 'name' }); // 👈 เพิ่ม tags บรรทัดนี้
 
         } else {
+            // ✅ แบบที่ 2: การ populate เมื่อใช้ find (เขียนต่อจุด . กันลงมาเรื่อยๆ ห้ามมี ; คั่น)
             rooms = await Room.find({})
-                .populate('createdBy', 'username firstName profileImage') // ✅ แก้ตรงนี้ด้วย
-                .populate('participants', 'username firstName profileImage') // ✅ แก้ตรงนี้ด้วย
+                .populate('createdBy', 'username firstName profileImage')
+                .populate('participants', 'username firstName profileImage')
+                .populate('tags', 'name') // 👈 เพิ่ม tags บรรทัดนี้
                 .sort({ createdAt: -1 })
                 .lean();
         }
@@ -234,6 +240,7 @@ exports.getRoomInformation = async (req, res) => {
         const room = await Room.findById(roomId)
             .populate('createdBy', 'username firstName lastName profilePicture') 
             .populate('participants', 'username profileImage');
+            .populate('tags', 'name')
 
         if (!room) {
             return res.status(404).json({ 
@@ -429,18 +436,18 @@ exports.getUserProfile = async (req, res) => {
 exports.updateRoom = async (req, res) => {
     try {
         const roomId = req.params.id;
-        const userId = req.user ? req.user.id : req.userId; // ไอดีคนกดแก้ไข
+        const userId = req.user ? req.user.id : req.userId;
         
         // 1. รับค่าที่ส่งมา
-        const { title, description, password, roomType, location } = req.body;
+        const { title, description, password, roomType, location, tags } = req.body;
 
-        // 2. หาห้องก่อน
+        
         let room = await Room.findById(roomId);
         if (!room) {
             return res.status(404).json({ success: false, message: 'ไม่พบห้องแชท' });
         }
 
-        // 3. 🛡️ เช็คสิทธิ์ 
+        // ช็คสิทธิ์ 
         if (room.createdBy.toString() !== userId && req.user.role !== 'admin') {
             return res.status(403).json({ success: false, message: 'คุณไม่มีสิทธิ์แก้ไขห้องนี้ (ต้องเป็นเจ้าของห้อง)' });
         }
@@ -450,6 +457,7 @@ exports.updateRoom = async (req, res) => {
         room.description = description || room.description;
         room.roomType = roomType || room.roomType;
 
+        
         // จัดการรหัสผ่าน 
         if (roomType === 'public') {
             room.password = undefined; // หรือ ""
@@ -481,7 +489,6 @@ exports.updateRoom = async (req, res) => {
                     fs.unlinkSync(oldPath);
                 }
             }
-            // ใส่รูปใหม่
             room.roomImage = `uploads/${req.file.filename}`;
         }
 

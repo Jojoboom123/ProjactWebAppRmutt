@@ -1,6 +1,6 @@
 const Notification = require('../models/Notification');
 
-// 1. 📥 ดึงรายการแจ้งเตือนทั้งหมดของผู้ใช้ (เรียงใหม่สุดก่อน)
+// 1.  ดึงรายการแจ้งเตือนทั้งหมดของผู้ใช้ (เรียงใหม่สุดก่อน)
 exports.getUserNotifications = async (req, res) => {
     try {
         const userId = req.userId;
@@ -34,7 +34,7 @@ exports.getUserNotifications = async (req, res) => {
     }
 };
 
-// 2. 👀 กดอ่านแจ้งเตือน (ทีละอัน)
+// 2.  กดอ่านแจ้งเตือน (ทีละอัน)
 exports.markAsRead = async (req, res) => {
     try {
         const { id } = req.params;
@@ -56,7 +56,7 @@ exports.markAsRead = async (req, res) => {
     }
 };
 
-// 3. ✅ กด "อ่านทั้งหมด" (Mark All as Read)
+// 3.  กด "อ่านทั้งหมด" (Mark All as Read)
 exports.markAllAsRead = async (req, res) => {
     try {
         await Notification.updateMany(
@@ -71,7 +71,7 @@ exports.markAllAsRead = async (req, res) => {
     }
 };
 
-// 4. 🗑️ ลบการแจ้งเตือน
+// 4.  ลบการแจ้งเตือน
 exports.deleteNotification = async (req, res) => {
     try {
         const { id } = req.params;
