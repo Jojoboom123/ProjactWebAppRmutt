@@ -239,8 +239,8 @@ exports.getRoomInformation = async (req, res) => {
 
         const room = await Room.findById(roomId)
             .populate('createdBy', 'username firstName lastName profilePicture') 
-            .populate('participants', 'username profileImage');
-            .populate('tags', 'name')
+            .populate('participants', 'username profileImage')
+            .populate('tags', 'name');
 
         if (!room) {
             return res.status(404).json({ 
