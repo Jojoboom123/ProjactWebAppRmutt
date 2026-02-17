@@ -15,6 +15,7 @@ const roomRoutes = require('./routes/roomRoutes');
 const userRoutes = require('./routes/userRoutes');
 const authRoutes = require('./routes/authRoutes');
 const adminRoutes = require('./routes/adminRoutes');
+const tagRoutes = require('./routes/tagRoutes');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -54,9 +55,10 @@ mongoose.connect(MONGO_URI)
 
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
-
 app.use('/api/rooms', roomRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/tags', tagRoutes);
+
 app.get('/', (req, res) => {
     res.send('Server is running normally! 🚀');
 });

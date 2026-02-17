@@ -32,8 +32,8 @@ router.get('/dashboard', verifyToken, verifyAdmin, async (req, res) => {
             User.countDocuments({ createdAt: { $gte: getStartDate('year') } }),
             User.countDocuments(),
             Room.countDocuments(),
-            Room.countDocuments({ activityDate: { $gte: new Date() } }), // 👈 นับเฉพาะห้องที่วันจัดกิจกรรมยังไม่ผ่านไป
-            Message.countDocuments({ createdAt: { $gte: getStartDate('day') } }) // 👈 นับแชทของวันนี้
+            Room.countDocuments({ activityDate: { $gte: new Date() } }), 
+            Message.countDocuments({ createdAt: { $gte: getStartDate('day') } }) 
         ]);
 
         // --- 2. สัดส่วนห้อง Public vs Private
