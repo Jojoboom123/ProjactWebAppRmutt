@@ -80,15 +80,29 @@ app.post('/api/create-room', upload.single('roomImage'), verifyToken, async (req
         console.log("🖼️ ไฟล์รูปภาพ:", req.file);
         
         const createdBy = req.userId;
-        const { title, description, activityDate, location, roomType, password } = req.body;
+        
+        // ✅ 1. รับค่า tags มาจาก req.body ด้วย
+        const { title, description, activityDate, location, roomType, password, tags } = req.body;
 
         const userObjectId = new mongoose.Types.ObjectId(createdBy);
+        
+        // จัดการ Location
         let parsedLocation = location;
         if (typeof location === 'string') {
             try {
                 parsedLocation = JSON.parse(location);
             } catch (e) {
                 return res.status(400).json({ message: 'Location format invalid (must be JSON string)' });
+            }
+        }
+
+        // ✅ 2. แปลง tags ที่ส่งมากับ form-data (มักเป็น String) ให้กลับเป็น Array
+        let parsedTags = [];
+        if (tags) {
+            try {
+                parsedTags = typeof tags === 'string' ? JSON.parse(tags) : tags;
+            } catch (e) {
+                console.error("Tags parse error:", e);
             }
         }
 
@@ -101,7 +115,8 @@ app.post('/api/create-room', upload.single('roomImage'), verifyToken, async (req
             roomType,
             participants: [userObjectId],
             password: roomType === 'public' ? null : password,
-            roomImage: req.file ? 'uploads/' + req.file.filename : "" 
+            roomImage: req.file ? 'uploads/' + req.file.filename : "",
+            Tag: parsedTags // ✅ 3. บันทึกแท็กลง DB (ใช้คำว่า Tag อิงตามฐานข้อมูลของคุณ)
         });
         
         await newRoom.save();
