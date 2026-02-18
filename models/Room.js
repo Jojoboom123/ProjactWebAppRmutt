@@ -11,7 +11,12 @@ const roomSchema = new mongoose.Schema({
         default: 'public'
     },
     password: { type: String, default: null },
-
+    
+    tags: [{ 
+        type: mongoose.Schema.Types.ObjectId, 
+        ref: 'Tag' 
+    }],
+    
     maxParticipants: {
         type: Number,
         required: true,
