@@ -2,6 +2,7 @@ const Room = require('../models/Room');
 const Message = require('../models/Message'); 
 const bcrypt = require('bcryptjs'); 
 const Report = require('../models/Reports');
+const Tag = require('../models/Tag');
 
 exports.createRoom = async (req, res) => {
     try {
@@ -259,7 +260,7 @@ exports.getRoomInformation = async (req, res) => {
         if (error.kind === 'ObjectId') {
             return res.status(400).json({ success: false, message: 'Invalid Room ID format' });
         }
-        res.status(500).json({ success: false, message: 'Server Error' });
+        res.status(500).json({ success: false, message: 'Server Error', error: error.message });
     }
 };
 
