@@ -48,7 +48,7 @@ router.get('/dashboard', verifyToken, verifyAdmin, async (req, res) => {
 
         // --- 3. สถานที่ยอดฮิต (Top 5 Locations)
         const popularLocations = await Room.aggregate([
-            { $group: { _id: "$location.name", roomCount: { $sum: 1 } } },
+            { $group: { _id: "$location.address", roomCount: { $sum: 1 } } },
             { $match: { _id: { $ne: null, $ne: "" } } },
             { $sort: { roomCount: -1 } },
             { $limit: 5 }
@@ -64,31 +64,21 @@ router.get('/dashboard', verifyToken, verifyAdmin, async (req, res) => {
 
         // --- 5. Tag ยอดฮิต (Top 5 Tags) 
         const popularTags = await Room.aggregate([
-            { $unwind: "$tags" },
-            { $group: { _id: "$tags", usageCount: { $sum: 1 } } },
-            { $sort: { usageCount: -1 } },
-            { $limit: 5 },
-            {
-                $lookup: { from: "tags", localField: "_id", foreignField: "_id", as: "tagInfo" }
-            },
-            { $unwind: "$tagInfo" },
-            { $project: { _id: 0, tagId: "$_id", name: "$tagInfo.name", usageCount: 1 } }
-        ]);
-
-         const monthlyBreakdown = await User.aggregate([
-            {
-                $match: {
-                createdAt: { $gte: getStartDate('year') } // เฉพาะปีนี้
-                }
-            },
-            {
-                $group: {
-                _id: { $month: "$createdAt" }, // group ตามเดือน 1-12
-                count: { $sum: 1 }
-                }
-            },
-            { $sort: { _id: 1 } }
-        ]);
+    { $unwind: "$Tag" }, // 👈 1. แก้เป็น "$Tag" (T ใหญ่ ไม่มี s)
+    { $group: { _id: "$Tag", usageCount: { $sum: 1 } } }, // 👈 2. แก้เป็น "$Tag"
+    { $sort: { usageCount: -1 } },
+    { $limit: 5 },
+    {
+        $lookup: { 
+            from: "tags", // อันนี้ชื่อ Collection ใน DB (ปกติต้องเป็นตัวเล็กเติม s ถูกแล้วครับ)
+            localField: "_id", 
+            foreignField: "_id", 
+            as: "tagInfo" 
+        }
+    },
+    { $unwind: "$tagInfo" },
+    { $project: { _id: 0, tagId: "$_id", name: "$tagInfo.name", usageCount: 1 } }
+]);
 
         // ส่งข้อมูลทั้งหมดกลับไปให้หน้าบ้าน
         res.json({
