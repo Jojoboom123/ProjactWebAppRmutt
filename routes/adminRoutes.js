@@ -35,6 +35,16 @@ router.get('/dashboard', verifyToken, verifyAdmin, async (req, res) => {
             Room.countDocuments({ activityDate: { $gte: new Date() } }), 
             Message.countDocuments({ createdAt: { $gte: getStartDate('day') } }) 
         ]);
+       
+        const monthlyBreakdown = await User.aggregate([
+            {
+                $group: {
+                    _id: { $month: { date: "$createdAt", timezone: "Asia/Bangkok" } }, 
+                    count: { $sum: 1 } 
+                }
+            },
+            { $sort: { "_id": 1 } } 
+        ]);
 
         // --- 2. สัดส่วนห้อง Public vs Private
         const roomTypes = await Room.aggregate([
