@@ -75,6 +75,21 @@ router.get('/dashboard', verifyToken, verifyAdmin, async (req, res) => {
             { $project: { _id: 0, tagId: "$_id", name: "$tagInfo.name", usageCount: 1 } }
         ]);
 
+         const monthlyBreakdown = await User.aggregate([
+            {
+                $match: {
+                createdAt: { $gte: getStartDate('year') } // เฉพาะปีนี้
+                }
+            },
+            {
+                $group: {
+                _id: { $month: "$createdAt" }, // group ตามเดือน 1-12
+                count: { $sum: 1 }
+                }
+            },
+            { $sort: { _id: 1 } }
+        ]);
+
         // ส่งข้อมูลทั้งหมดกลับไปให้หน้าบ้าน
         res.json({
             success: true,
@@ -83,7 +98,8 @@ router.get('/dashboard', verifyToken, verifyAdmin, async (req, res) => {
                     today: dailyUsers, 
                     thisMonth: monthlyUsers, 
                     thisYear: yearlyUsers, 
-                    total: totalUsers 
+                    total: totalUsers,
+                    monthlyBreakdown: monthlyBreakdown 
                 },
                 rooms: { 
                     total: totalRooms,
@@ -98,6 +114,8 @@ router.get('/dashboard', verifyToken, verifyAdmin, async (req, res) => {
                 topTags: popularTags            
             }
         });
+
+       
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
