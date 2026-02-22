@@ -77,32 +77,33 @@ const io = new Server(server, {
 app.post('/api/create-room', upload.single('roomImage'), verifyToken, async (req, res) => {
     try {
         console.log("📝 ได้รับข้อมูลสร้างห้อง:", req.body);
-        console.log("🖼️ ไฟล์รูปภาพ:", req.file);
         
         const createdBy = req.userId;
         
-        // ✅ 1. รับค่า tags มาจาก req.body ด้วย
+        // 1. ✅ เพิ่มการรับตัวแปร 'tags' เข้ามาด้วย
         const { title, description, activityDate, location, roomType, password, tags } = req.body;
 
         const userObjectId = new mongoose.Types.ObjectId(createdBy);
         
-        // จัดการ Location
+        // จัดการ Location (แปลง JSON String เป็น Object)
         let parsedLocation = location;
         if (typeof location === 'string') {
             try {
                 parsedLocation = JSON.parse(location);
             } catch (e) {
-                return res.status(400).json({ message: 'Location format invalid (must be JSON string)' });
+                return res.status(400).json({ message: 'Location format invalid' });
             }
         }
 
-        // ✅ 2. แปลง tags ที่ส่งมากับ form-data (มักเป็น String) ให้กลับเป็น Array
+        // 2. ✅ เพิ่มส่วนแปลง Tags (เพราะถ้าส่งมากับรูปภาพ มันจะเป็น String ต้องแปลงเป็น Array)
         let parsedTags = [];
         if (tags) {
             try {
+                // ถ้าเป็น String ให้แปลงเป็น JSON, ถ้าเป็น Array อยู่แล้วก็ใช้ได้เลย
                 parsedTags = typeof tags === 'string' ? JSON.parse(tags) : tags;
             } catch (e) {
                 console.error("Tags parse error:", e);
+                parsedTags = []; // ถ้าแปลงไม่ได้ ให้เป็นว่างไว้ก่อน
             }
         }
 
@@ -116,11 +117,11 @@ app.post('/api/create-room', upload.single('roomImage'), verifyToken, async (req
             participants: [userObjectId],
             password: roomType === 'public' ? null : password,
             roomImage: req.file ? 'uploads/' + req.file.filename : "",
-            Tag: parsedTags // ✅ 3. บันทึกแท็กลง DB (ใช้คำว่า Tag อิงตามฐานข้อมูลของคุณ)
+            Tag: parsedTags // 3. ✅ บันทึกลงฟิลด์ 'Tag' (ตามชื่อใน Database ของคุณ)
         });
         
         await newRoom.save();
-        console.log(`Room Created: ${newRoom.title} (Image: ${newRoom.roomImage})`);
+        console.log(`Room Created: ${newRoom.title} with Tags: ${parsedTags}`);
 
         io.emit('refresh_room_list'); 
         res.status(201).json({ success: true, message: 'สร้างห้องสำเร็จ', room: newRoom });

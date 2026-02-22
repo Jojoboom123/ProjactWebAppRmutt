@@ -4,62 +4,6 @@ const bcrypt = require('bcryptjs');
 const Report = require('../models/Reports');
 const Tag = require('../models/Tag');
 
-exports.createRoom = async (req, res) => {
-    try {
-      
-        const { title, description, lat, lng, address, activityDate, password, roomType, maxParticipants, tags } = req.body;
-
-        if (!title || !lat || !lng || !activityDate) {
-             return res.status(400).json({ 
-                 success: false, 
-                 message: 'กรุณากรอกข้อมูลให้ครบ (ชื่อห้อง, พิกัด, วันเวลานัดหมาย)' 
-             });
-        }
-        let parsedTags = [];
-                if (tags) {
-                    try {
-                        parsedTags = typeof tags === 'string' ? JSON.parse(tags) : tags;
-                    } catch (e) {
-                        console.error("Tags parse error");
-                    }
-                }
-        const newRoom = new Room({
-            title,
-            description,
-            
-            location: { 
-                type: 'Point', 
-                coordinates: [parseFloat(lng), parseFloat(lat)], 
-                address: address 
-            },
-            activityDate,
-            password: password || null, 
-            roomType: roomType || 'public',
-            maxParticipants: maxParticipants || 10,
-            tags: parsedTags, 
-            createdBy: req.userId,
-            participants: [req.userId],
-            roomImage: req.file ? req.file.filename : "" 
-        });
-
-        await newRoom.save();
-        
-        res.status(201).json({ 
-            success: true, 
-            message: 'สร้างห้องสำเร็จ!', 
-            room: newRoom 
-        });
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ 
-            success: false, 
-            message: 'Server Error', 
-            error: error.message 
-        });
-    }
-};
-
-
 exports.getAllRooms = async (req, res) => {
     try {
         let { lat, lng } = req.query;

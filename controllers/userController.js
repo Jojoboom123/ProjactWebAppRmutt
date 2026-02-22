@@ -148,16 +148,16 @@ exports.getJoinedRooms = async (req, res) => {
     try {
         const userId = req.user ? req.user : { userId: req.userId };
 
-        // ใช้ Aggregate เพื่อ Join ข้อมูล
-        const rooms = await Room.aggregate([
-            { $match: { participants: new mongoose.Types.ObjectId(userId) } }, // หาห้องที่มีเรา
+        // 1. ใช้ Aggregate เพื่อ Join ข้อมูล
+        let rooms = await Room.aggregate([
+            { $match: { participants: new mongoose.Types.ObjectId(userId) } }, 
             {
-                $lookup: { // Join กับตาราง Messages
+                $lookup: { 
                     from: 'messages',
                     let: { roomId: '$_id' },
                     pipeline: [
                         { $match: { $expr: { $eq: ['$roomId', '$$roomId'] } } },
-                        { $sort: { createdAt: -1 } }, // เรียงเอาใหม่สุด
+                        { $sort: { createdAt: -1 } }, 
                         { $limit: 1 }
                     ],
                     as: 'lastMessageData'
@@ -165,12 +165,19 @@ exports.getJoinedRooms = async (req, res) => {
             },
             {
                 $addFields: {
-                    lastMessage: { $arrayElemAt: ['$lastMessageData.message', 0] }, // ดึงข้อความออกมา
-                    lastMessageTime: { $arrayElemAt: ['$lastMessageData.createdAt', 0] } // ดึงเวลาออกมา
+                    lastMessage: { $arrayElemAt: ['$lastMessageData.message', 0] }, 
+                    lastMessageTime: { $arrayElemAt: ['$lastMessageData.createdAt', 0] } 
                 }
             },
             { $project: { lastMessageData: 0 } }
         ]);
+
+        //  2. เพิ่มการ Populate หลังจาก Aggregate เสร็จแล้ว
+        // เพื่อเปลี่ยน Object ID ให้กลายเป็น Object ข้อมูลจริงๆ
+        rooms = await Room.populate(rooms, { path: 'tags', select: 'name' });
+        
+        rooms = await Room.populate(rooms, { path: 'createdBy', select: 'username firstName profileImage' });
+        rooms = await Room.populate(rooms, { path: 'participants', select: 'username firstName profileImage' });
 
         res.json({ success: true, data: rooms });
     } catch (error) {
