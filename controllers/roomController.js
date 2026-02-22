@@ -12,7 +12,7 @@ exports.getAllRooms = async (req, res) => {
         if (lat && lng) {
             const userLat = parseFloat(lat);
             const userLng = parseFloat(lng);
-            const FIXED_RADIUS_METERS = 2000; 
+            const FIXED_RADIUS_METERS = 200000; // หรือ 2000 ตามที่คุณต้องการ
 
             rooms = await Room.aggregate([
                 {
@@ -29,17 +29,19 @@ exports.getAllRooms = async (req, res) => {
                 }
             ]);
 
-            // ✅ แบบที่ 1: การ populate เมื่อใช้ aggregate (เขียนแยกบรรทัดกัน)
+            // ✅ 1: การ populate เมื่อใช้ aggregate
             await Room.populate(rooms, { path: 'createdBy', select: 'username firstName profileImage' });
             await Room.populate(rooms, { path: 'participants', select: 'username firstName profileImage' });
-            await Room.populate(rooms, { path: 'tags', select: 'name' }); // 👈 เพิ่ม tags บรรทัดนี้
+            
+            // ⭐⭐⭐ 2: เพิ่มบรรทัดนี้ลงไป เพื่อให้หน้า Home มีแท็ก (และไม่พังตอนแกะ JSON) ⭐⭐⭐
+            await Room.populate(rooms, { path: 'Tag', select: 'name' });
 
         } else {
-            // ✅ แบบที่ 2: การ populate เมื่อใช้ find (เขียนต่อจุด . กันลงมาเรื่อยๆ ห้ามมี ; คั่น)
+            // ✅ แบบที่ 2: การ populate เมื่อใช้ find
             rooms = await Room.find({})
                 .populate('createdBy', 'username firstName profileImage')
                 .populate('participants', 'username firstName profileImage')
-                .populate('tags', 'name') // 👈 เพิ่ม tags บรรทัดนี้
+                .populate('Tag', 'name') // อันนี้คุณใส่ไว้แล้ว
                 .sort({ createdAt: -1 })
                 .lean();
         }
@@ -54,7 +56,7 @@ exports.getAllRooms = async (req, res) => {
         console.error(error);
         res.status(500).json({ success: false, message: 'Server Error' });
     }
-};
+}
 
 exports.joinPublicRoom = async (req, res) => {
     try {

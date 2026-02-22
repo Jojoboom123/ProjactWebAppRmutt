@@ -103,7 +103,7 @@ app.post('/api/create-room', upload.single('roomImage'), verifyToken, async (req
                 parsedTags = typeof tags === 'string' ? JSON.parse(tags) : tags;
             } catch (e) {
                 console.error("Tags parse error:", e);
-                parsedTags = []; // ถ้าแปลงไม่ได้ ให้เป็นว่างไว้ก่อน
+                parsedTags = []; 
             }
         }
 
@@ -117,7 +117,7 @@ app.post('/api/create-room', upload.single('roomImage'), verifyToken, async (req
             participants: [userObjectId],
             password: roomType === 'public' ? null : password,
             roomImage: req.file ? 'uploads/' + req.file.filename : "",
-            Tag: parsedTags // 3. ✅ บันทึกลงฟิลด์ 'Tag' (ตามชื่อใน Database ของคุณ)
+            Tag: parsedTags 
         });
         
         await newRoom.save();
