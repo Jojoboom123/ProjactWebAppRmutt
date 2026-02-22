@@ -174,8 +174,7 @@ exports.getJoinedRooms = async (req, res) => {
 
         //  2. เพิ่มการ Populate หลังจาก Aggregate เสร็จแล้ว
         // เพื่อเปลี่ยน Object ID ให้กลายเป็น Object ข้อมูลจริงๆ
-        rooms = await Room.populate(rooms, { path: 'tags', select: 'name' });
-        
+        rooms = await Room.populate(rooms, { path: 'Tag', select: 'name' });
         rooms = await Room.populate(rooms, { path: 'createdBy', select: 'username firstName profileImage' });
         rooms = await Room.populate(rooms, { path: 'participants', select: 'username firstName profileImage' });
 
