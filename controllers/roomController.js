@@ -12,7 +12,7 @@ exports.getAllRooms = async (req, res) => {
         if (lat && lng) {
             const userLat = parseFloat(lat);
             const userLng = parseFloat(lng);
-            const FIXED_RADIUS_METERS = 200000; // หรือ 2000 ตามที่คุณต้องการ
+            const FIXED_RADIUS_METERS = 2000; 
 
             rooms = await Room.aggregate([
                 {
@@ -33,11 +33,9 @@ exports.getAllRooms = async (req, res) => {
             await Room.populate(rooms, { path: 'createdBy', select: 'username firstName profileImage' });
             await Room.populate(rooms, { path: 'participants', select: 'username firstName profileImage' });
             
-            // ⭐⭐⭐ 2: เพิ่มบรรทัดนี้ลงไป เพื่อให้หน้า Home มีแท็ก (และไม่พังตอนแกะ JSON) ⭐⭐⭐
             await Room.populate(rooms, { path: 'Tag', select: 'name' });
 
         } else {
-            // ✅ แบบที่ 2: การ populate เมื่อใช้ find
             rooms = await Room.find({})
                 .populate('createdBy', 'username firstName profileImage')
                 .populate('participants', 'username firstName profileImage')

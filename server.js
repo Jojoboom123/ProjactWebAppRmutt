@@ -227,7 +227,7 @@ io.on('connection', (socket) => {
                 room.participants.forEach(async (user) => {
                     const userIdStr = user._id.toString();
                     const senderIdStr = senderId.toString();
-
+                    
                     // ไม่ส่งหาตัวเอง
                     if (userIdStr !== senderIdStr) {
                         // A. ยิง Push Notification (เฉพาะคนที่มี Token)
