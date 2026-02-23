@@ -171,103 +171,56 @@ io.on('connection', (socket) => {
     });
 
     // Send message event
-    socket.on('send_message', async (data) => {
-        try {
-            console.log('\n📤 ===== SENDING MESSAGE =====');
-            console.log('Data received:', data);
+   socket.on('send_message', async (data) => {
+    try {
+        // 1. รับค่า userLocation เพิ่มเข้ามา
+        const { roomId, message, type = 'text', userLocation } = data;
 
-            const { roomId, message, type = 'text' } = data;
+        if (!socket.user) return; // หรือส่ง error กลับ
+        const senderId = socket.user.id;
 
-            // ตรวจสอบว่ามี user หรือไม่
-            if (!socket.user) {
-                console.error("❌ No user found in socket - Authentication failed");
-                socket.emit('error', { message: 'Authentication error' });
-                return;
+        const room = await Room.findById(roomId);
+        if (!room) return;
+
+        // 2. 🛡️ BACKEND CHECK: เช็คระยะทางเพื่อความปลอดภัย (กันคนยิง API มั่ว)
+        if (room.location && room.location.coordinates && userLocation) {
+            const roomLon = room.location.coordinates[0];
+            const roomLat = room.location.coordinates[1];
+            
+            // รับค่าจาก Frontend (ต้องส่งมาเป็น { lat: ..., lng: ... })
+            const userLat = userLocation.lat;
+            const userLon = userLocation.lng;
+
+            if (userLat && userLon) {
+                const distance = getDistanceFromLatLonInKm(userLat, userLon, roomLat, roomLon);
+                const MAX_RADIUS_KM = 2.0; // ⛔ กำหนดระยะห้ามเกิน 2 กม.
+
+                if (distance > MAX_RADIUS_KM) {
+                    console.log(`❌ User อยู่นอกระยะ (${distance.toFixed(2)} km) - ปฏิเสธข้อความ`);
+                    socket.emit('error', { message: 'คุณอยู่นอกพื้นที่กิจกรรม ไม่สามารถส่งข้อความได้' });
+                    return; // จบการทำงานทันที
+                }
             }
-
-            // ดึง user ID
-            const senderId = socket.user.id || socket.user.userId || socket.user._id;
-            const senderName = socket.user.username;
-
-            if (!senderId) {
-                console.error("❌ Cannot extract user ID from token");
-                socket.emit('error', { message: 'Invalid user data' });
-                return;
-            }
-
-            console.log(`👤 Sender ID: ${senderId}`);
-            console.log(`🏠 Room ID: ${roomId}`);
-
-            // สร้างข้อความใหม่
-            const newMessage = new Message({
-                roomId,
-                sender: senderId,
-                message,
-                type: type
-            });
-
-            await newMessage.save();
-            console.log(`✅ Message saved to MongoDB: ${newMessage._id}`);
-
-            // Populate sender information
-            const messageData = await newMessage.populate('sender', 'username profilePicture');
-
-            // Broadcast to room (ส่ง Socket ให้คนที่เปิดจออยู่)
-            io.to(roomId).emit('receive_message', messageData);
-            console.log(`✅ Message broadcast to room ${roomId}`);
-
-
-            // 1. ดึงข้อมูลห้อง และ "รายชื่อคนในห้อง" (participants)
-            const room = await Room.findById(roomId).populate('participants');
-
-            if (room && room.participants) {
-                console.log(`👥 สมาชิกในห้องมี: ${room.participants.length} คน (รวมคนส่ง)`);
-
-                // 2. วนลูปเช็คสมาชิกทีละคน
-                room.participants.forEach(async (user) => {
-                    const userIdStr = user._id.toString();
-                    const senderIdStr = senderId.toString();
-                    
-                    // ไม่ส่งหาตัวเอง
-                    if (userIdStr !== senderIdStr) {
-                        // A. ยิง Push Notification (เฉพาะคนที่มี Token)
-                        if (user.fcmToken) {
-                            console.log(`📲 กำลังส่งแจ้งเตือนหา: ${user.username}`);
-                            firebaseService.sendPushNotification(
-                                user.fcmToken,
-                                `ข้อความใหม่จาก ${room.title}`,
-                                `${senderName}: ${type === 'image' ? 'ส่งรูปภาพ' : message}`,
-                                { roomId: roomId.toString() }
-                            ).catch(err => console.error('Push Error:', err.message));
-                        }
-                        try {
-                            await Notification.create({
-                                recipient: user._id,
-                                sender: senderId,
-                                title: `ข้อความใหม่จาก ${room.title}`,
-                                body: `${senderName}: ${type === 'image' ? 'ส่งรูปภาพ' : message}`,
-                                type: 'new_message',
-                                data: { roomId: roomId.toString() }
-                            });
-                            console.log(`📝 บันทึกแจ้งเตือนให้ ${user.username} แล้ว`);
-                        } catch (err) {
-                            console.error('Save notification error:', err);
-                        }
-                    }
-                });
-            }
-
-            console.log('============================\n');
-
-        } catch (error) {
-            console.error("\n❌ ===== ERROR SENDING MESSAGE =====");
-            console.error("Error:", error);
-
-            socket.emit('error', {
-                message: 'Failed to send message: ' + error.message
-            });
         }
-    });
+
+        // 3. ถ้าผ่านเงื่อนไข ก็บันทึกตามปกติ
+        const newMessage = new Message({
+            roomId,
+            sender: senderId,
+            message,
+            type
+        });
+        await newMessage.save();
+
+        // Populate ข้อมูลคนส่งเพื่อส่งกลับไปแสดงผลทันที
+        await newMessage.populate('sender', 'username profileImage');
+
+        io.to(roomId).emit('receive_message', newMessage);
+
+    } catch (error) {
+        console.error(error);
+    }
+});
 
     // Delete room event
     socket.on('delete_room', async (data) => {
@@ -302,6 +255,22 @@ io.on('connection', (socket) => {
         console.log(`⚠️ User disconnected: ${socket.id}`);
     });
 });
+
+function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) {
+    const R = 6371; // รัศมีโลก (km)
+    const dLat = deg2rad(lat2 - lat1);
+    const dLon = deg2rad(lon2 - lon1);
+    const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+}
+
+function deg2rad(deg) {
+    return deg * (Math.PI / 180);
+}
 
 // Start server
 server.listen(PORT, '0.0.0.0', () => {
