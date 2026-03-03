@@ -23,7 +23,7 @@ exports.sendOtp = async (phoneNumber) => {
     // Log ดูรหัส (เพราะเราไม่ได้ต่อ SMS จริง)
     console.log(`[OTP Service] ส่งไปที่ ${phoneNumber} รหัส: ${otpCode}`);
 
-    return true; 
+    return otpCode; 
 };
 
 // ฟังก์ชันตรวจสอบ OTP
