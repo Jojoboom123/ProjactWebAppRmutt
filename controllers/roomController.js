@@ -1,119 +1,487 @@
 const Room = require('../models/Room');
-
-
-exports.createRoom = async (req, res) => {
-    try {
-        const { title, description, lat, lng, address, activityDate, password } = req.body;
-
-        const newRoom = new Room({
-            title,
-            description,
-            location: { lat, lng, address },
-            activityDate,
-            password: password || null, 
-            createdBy: req.userId,
-            participants: [req.userId] 
-        });
-
-        await newRoom.save();
-        res.status(201).json({ message: 'สร้างห้องสำเร็จ!', room: newRoom });
-    } catch (error) {
-        res.status(500).json({ message: 'Server Error', error });
-    }
-};
-
+const Message = require('../models/Message'); 
+const bcrypt = require('bcryptjs'); 
+const Report = require('../models/Reports');
+const Tag = require('../models/Tag');
 
 exports.getAllRooms = async (req, res) => {
     try {
-        
-        const rooms = await Room.find()
-            .populate('createdBy', 'username firstName profilePicture')
-            .populate('participants', 'username firstName profilePicture')
-            .sort({ createdAt: -1 });
+        let { lat, lng } = req.query;
+        let rooms;
 
-        res.json(rooms);
+        if (lat && lng) {
+            const userLat = parseFloat(lat);
+            const userLng = parseFloat(lng);
+            const FIXED_RADIUS_METERS = 2000; 
+
+            rooms = await Room.aggregate([
+                {
+                    $geoNear: {
+                        near: { type: "Point", coordinates: [userLng, userLat] },
+                        distanceField: "distanceFromMe", 
+                        maxDistance: FIXED_RADIUS_METERS, 
+                        spherical: true,
+                        distanceMultiplier: 1 
+                    }
+                },
+                {
+                    $sort: { distanceFromMe: 1 } 
+                }
+            ]);
+
+            // ✅ 1: การ populate เมื่อใช้ aggregate
+            await Room.populate(rooms, { path: 'createdBy', select: 'username firstName profileImage' });
+            await Room.populate(rooms, { path: 'participants', select: 'username firstName profileImage' });
+            
+            await Room.populate(rooms, { path: 'Tag', select: 'name' });
+
+        } else {
+            rooms = await Room.find({})
+                .populate('createdBy', 'username firstName profileImage')
+                .populate('participants', 'username firstName profileImage')
+                .populate('Tag', 'name') // อันนี้คุณใส่ไว้แล้ว
+                .sort({ createdAt: -1 })
+                .lean();
+        }
+
+        res.status(200).json({ 
+            success: true, 
+            count: rooms.length, 
+            data: rooms 
+        });
+
     } catch (error) {
-        res.status(500).json({ message: 'Server Error' });
+        console.error(error);
+        res.status(500).json({ success: false, message: 'Server Error' });
     }
-};
+}
 
-
-exports.joinRoom = async (req, res) => {
+exports.joinPublicRoom = async (req, res) => {
     try {
-        const { roomId, password } = req.body;
+        const { roomId } = req.params;
         const userId = req.userId;
 
         const room = await Room.findById(roomId);
-        if (!room) return res.status(404).json({ message: 'ไม่พบห้องนี้' });
+        if (!room) return res.status(404).json({ success: false, message: 'ไม่พบห้องนี้' });
 
-       
-        if (room.bannedUsers.includes(userId)) {
-            return res.status(403).json({ message: 'คุณถูกแบนจากห้องนี้ ไม่สามารถเข้าร่วมได้' });
+        if (room.roomType !== 'public') {
+            return res.status(400).json({ success: false, message: 'ห้องนี้เป็น Private' });
         }
 
-        if (room.participants.includes(userId)) {
-            return res.status(400).json({ message: 'คุณอยู่ในห้องนี้อยู่แล้ว' });
+        if (room.bannedUsers.includes(userId)) return res.status(403).json({ message: 'คุณถูกแบน' });
+        if (room.participants.includes(userId)) return res.status(200).json({ success: true, message: 'อยู่แล้ว' });
+        if (room.participants.length >= room.maxParticipants) return res.status(400).json({ message: 'ห้องเต็ม' });
+
+        room.participants.push(userId);
+        await room.save();
+
+        res.json({ success: true, message: 'เข้าร่วมห้องสำเร็จ!', room });
+
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ success: false, message: 'Server Error' });
+    }
+};
+
+exports.joinPrivateRoom = async (req, res) => {
+    try {
+        const { roomId } = req.params;
+        const { password } = req.body;
+        const userId = req.userId;
+
+        // ✅ เช็ค password ก่อน
+        if (!password) {
+            return res.status(400).json({
+                success: false,
+                message: 'กรุณากรอกรหัสผ่าน'
+            });
         }
 
-        
-        if (room.password && room.password !== password) {
-            return res.status(401).json({ message: 'รหัสผ่านเข้าห้องไม่ถูกต้อง' });
+        // ✅ ต้องประกาศ room ก่อนใช้งาน
+        const room = await Room.findById(roomId);
+        if (!room) {
+            return res.status(404).json({
+                success: false,
+                message: 'ไม่พบห้องนี้'
+            });
+        }
+
+        if (room.roomType !== 'private') {
+            return res.status(400).json({
+                success: false,
+                message: 'ห้องนี้เป็น Public'
+            });
+        }
+
+        const isMatch = await bcrypt.compare(password, room.password);
+        if (!isMatch) {
+            return res.status(401).json({
+                success: false,
+                message: 'รหัสผ่านผิด'
+            });
+        }
+
+        if (room.bannedUsers.some(id => id.toString() === userId)) {
+            return res.status(403).json({ message: 'คุณถูกแบน' });
+        }
+
+        if (room.participants.some(id => id.toString() === userId)) {
+            return res.status(200).json({ success: true, message: 'อยู่แล้ว' });
+        }
+
+        if (room.participants.length >= room.maxParticipants) {
+            return res.status(400).json({ message: 'ห้องเต็ม' });
         }
 
         room.participants.push(userId);
         await room.save();
 
-        res.json({ message: 'เข้าร่วมห้องสำเร็จ!', room });
+        res.json({
+            success: true,
+            message: 'เข้าร่วมห้องสำเร็จ!',
+            room
+        });
 
     } catch (error) {
-        res.status(500).json({ message: 'Server Error' });
+        console.error(error);
+        res.status(500).json({
+            success: false,
+            message: 'Server Error'
+        });
     }
 };
+
 
 exports.deleteRoom = async (req, res) => {
     try {
         const { roomId } = req.body;
         const room = await Room.findById(roomId);
 
-        if (!room) return res.status(404).json({ message: 'ไม่พบห้องนี้' });
+        if (!room) return res.status(404).json({ success: false, message: 'ไม่พบห้องนี้' });
 
         if (room.createdBy.toString() !== req.userId) {
-            return res.status(403).json({ message: 'คุณไม่ใช่เจ้าของห้องนี้ ลบไม่ได้!' });
+            return res.status(403).json({ success: false, message: 'คุณไม่ใช่เจ้าของห้อง' });
         }
 
         await Room.findByIdAndDelete(roomId);
-        res.json({ message: 'ลบห้องเรียบร้อยแล้ว' });
+        res.json({ success: true, message: 'ลบห้องเรียบร้อยแล้ว' });
 
     } catch (error) {
-        res.status(500).json({ message: 'Server Error' });
+        res.status(500).json({ success: false, message: 'Server Error' });
+    }
+};
+exports.getRoomInformation = async (req, res) => {
+    try {
+  
+        const { roomId } = req.body;
+
+        if (!roomId) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Please provide roomId in the body' 
+            });
+        }
+
+        const room = await Room.findById(roomId)
+            .populate('createdBy', 'username firstName lastName profilePicture') 
+            .populate('participants', 'username profileImage')
+            .populate('tags', 'name');
+
+        if (!room) {
+            return res.status(404).json({ 
+                success: false, 
+                message: 'Room not found' 
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            data: room
+        });
+
+    } catch (error) {
+        console.error(error);
+        if (error.kind === 'ObjectId') {
+            return res.status(400).json({ success: false, message: 'Invalid Room ID format' });
+        }
+        res.status(500).json({ success: false, message: 'Server Error', error: error.message });
     }
 };
 
-//  (Kick/Ban)
 exports.kickUser = async (req, res) => {
     try {
         const { roomId, targetUserId, ban } = req.body; 
         const room = await Room.findById(roomId);
 
-        if (!room) return res.status(404).json({ message: 'ไม่พบห้องนี้' });
-
+        if (!room) return res.status(404).json({ success: false, message: 'ไม่พบห้องนี้' });
         
         if (room.createdBy.toString() !== req.userId) {
-            return res.status(403).json({ message: 'คุณไม่ใช่เจ้าของห้อง สั่งเตะใครไม่ได้!' });
+            return res.status(403).json({ success: false, message: 'คุณไม่ใช่เจ้าของห้อง' });
         }
 
-       
         room.participants = room.participants.filter(id => id.toString() !== targetUserId);
-
        
         if (ban === true) {
             room.bannedUsers.push(targetUserId);
         }
 
         await room.save();
-        res.json({ message: ban ? 'เตะและแบนสมาชิกเรียบร้อย' : 'เตะสมาชิกเรียบร้อย' });
+        res.json({ 
+            success: true, 
+            message: ban ? 'เตะและแบนสมาชิกเรียบร้อย' : 'เตะสมาชิกเรียบร้อย' 
+        });
 
     } catch (error) {
-        res.status(500).json({ message: 'Server Error' });
+        res.status(500).json({ success: false, message: 'Server Error' });
     }
 };
+
+exports.getRoomMessages = async (req, res) => {
+   try {
+        const { roomId } = req.params;
+        const { limit = 50, skip = 0 } = req.query; 
+
+        console.log(`📥 Fetching messages for room: ${roomId}`);
+
+        // ดึงข้อความจาก DB โดยเรียงตามเวลา (เก่า -> ใหม่)
+        const messages = await Message.find({ roomId })
+            .populate('sender', 'username profilePicture') 
+            .sort({ createdAt: 1 }) // เรียงจากเก่าไปใหม่
+            .limit(parseInt(limit))
+            .skip(parseInt(skip));
+
+        console.log(`✅ Found ${messages.length} messages`);
+
+        res.json({
+            success: true,
+            count: messages.length,
+            messages
+        });
+
+    } catch (error) {
+        console.error('❌ Error fetching messages:', error);
+        res.status(500).json({
+            success: false,
+            message: 'ไม่สามารถดึงข้อความได้: ' + error.message
+        });
+    }
+};
+
+exports.getLastestMessage = async (req, res) => {
+     try {
+        const { roomId } = req.params;
+        const { before } = req.query; // Timestamp ของข้อความก่อนหน้า
+
+        let query = { roomId };
+        
+        // ถ้ามี before (เอาไว้โหลดข้อความเก่าขึ้นไป)
+        if (before) {
+            query.createdAt = { $lt: new Date(before) };
+        }
+
+        const messages = await Message.find(query)
+            .populate('sender', 'username profilePicture')
+            .sort({ createdAt: -1 }) // เรียงจากใหม่ไปเก่า
+            .limit(20);
+
+        res.json({
+            success: true,
+            count: messages.length,
+            messages: messages.reverse() 
+        });
+
+    } catch (error) {
+        console.error('❌ Error fetching latest messages:', error);
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+}
+
+exports.leaveRoom = async (req, res) => {
+    try {
+        const { roomId } = req.params;
+        const userId = req.userId;
+
+        console.log(`🚪 User ${userId} is attempting to leave room ${roomId}`);
+        const room = await Room.findById(roomId);
+
+        if (!room) return res.status(404).json({ success: false, message: 'ไม่พบห้องนี้' });    
+        room.participants = room.participants.filter(id => id.toString() !== userId);
+        await room.save();
+
+        res.json({ success: true, message: 'ออกจากห้องเรียบร้อยแล้ว' });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ success: false, message: 'Server Error' });
+    }   
+};
+
+exports.reportMessage = async (req, res) => { {
+    try {
+        const { roomId } = req.params;
+        const {  messageId, reportedUserId, reason } = req.body;
+        const reporterId = req.userId;
+        if (!roomId || !messageId || !reportedUserId || !reason) {
+            return res.status(400).json({ success: false, message: 'กรุณากรอกข้อมูลให้ครบถ้วน' });
+        }   
+        const newReport = new Report({
+            roomId,
+            messageId,
+            reportedUser: reportedUserId,
+            reporterUser: reporterId,
+            reason
+        });
+        await newReport.save();
+        res.status(201).json({ success: true, message: 'รายงานถูกส่งเรียบร้อยแล้ว' });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ success: false, message: 'Server Error' });
+    }   
+}};
+
+exports.uploadImage = async (req,res) =>{
+    try{
+        if(!req.file){
+            return res.status(400).json({seccess: false, message: 'No file upload'});
+        }
+
+        const filePath = `uploads/${req.file.filename}`;
+
+        res.status(200).json({
+            success: true,
+            message: 'Upload successful',
+            imageUrl: filePath
+        });
+    }catch (error) {
+        console.error("Upload Error:", error);
+        res.status(500).json({ success: false, message: 'Upload failed' });
+    }
+};
+exports.getUserProfile = async (req, res) => {
+    try {
+        // req.user.id มาจาก verifyToken
+        const userId = req.user ? req.user.id : req.userId;
+        const user = await User.findById(userId).select('-password'); // ไม่ส่ง password กลับไป
+
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'User not found' });
+        }
+
+        res.json({
+            success: true,
+            user: user
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ success: false, message: 'Server Error' });
+    }
+};
+exports.updateRoom = async (req, res) => {
+    try {
+        const roomId = req.params.id;
+        const userId = req.user ? req.user.id : req.userId;
+        
+        // 1. รับค่าที่ส่งมา
+        const { title, description, password, roomType, location, tags } = req.body;
+
+        
+        let room = await Room.findById(roomId);
+        if (!room) {
+            return res.status(404).json({ success: false, message: 'ไม่พบห้องแชท' });
+        }
+
+        // ช็คสิทธิ์ 
+        if (room.createdBy.toString() !== userId && req.user.role !== 'admin') {
+            return res.status(403).json({ success: false, message: 'คุณไม่มีสิทธิ์แก้ไขห้องนี้ (ต้องเป็นเจ้าของห้อง)' });
+        }
+
+        // 4. อัปเดตข้อมูล (ถ้ามีการส่งค่ามาใหม่ ก็ใช้ค่าใหม่ ถ้าไม่ส่งมา ก็ใช้ค่าเดิม)
+        room.title = title || room.title;
+        room.description = description || room.description;
+        room.roomType = roomType || room.roomType;
+
+        
+        // จัดการรหัสผ่าน 
+        if (roomType === 'public') {
+            room.password = undefined; // หรือ ""
+        } else if (password) {
+            // ถ้าส่งรหัสมาใหม่ ก็อัปเดต )
+            room.password = password; 
+        }
+
+        // 5. จัดการ Location (ตำแหน่ง)
+        if (location) {
+            if (typeof location === 'string') {
+                try {
+                    room.location = JSON.parse(location);
+                } catch (e) {
+                    console.error("Location parse error:", e);
+                    
+                }
+            } else {
+                room.location = location;
+            }
+        }
+
+        // 6. จัดการรูปภาพ (ถ้ามีการอัปโหลดรูปใหม่มา)
+        if (req.file) {
+            if (room.roomImage && room.roomImage !== "") {
+                const oldPath = path.join(__dirname, '../', room.roomImage); 
+                
+                if (fs.existsSync(oldPath)) {
+                    fs.unlinkSync(oldPath);
+                }
+            }
+            room.roomImage = `uploads/${req.file.filename}`;
+        }
+
+        // 7. บันทึก
+        await room.save();
+
+        res.json({
+            success: true,
+            message: 'แก้ไขห้องสำเร็จ',
+            room: room
+        });
+
+    } catch (error) {
+        console.error("Update Room Error:", error);
+        res.status(500).json({ success: false, message: 'Server Error' });
+    }
+};
+
+exports.getRoomReports = async (req, res) => {
+    try {
+        const { roomId } = req.params;
+        const userId = req.userId; // ได้มาจาก verifyToken
+
+       
+        const room = await Room.findById(roomId);
+        if (!room) {
+            return res.status(404).json({ success: false, message: 'ไม่พบห้องแชท' });
+        }
+
+        if (room.createdBy.toString() !== userId) {
+            return res.status(403).json({ success: false, message: 'คุณไม่ใช่เจ้าของห้องนี้ ไม่มีสิทธิ์ดูรายงาน' });
+        }
+
+        // 3. ดึง Report ทั้งหมดของห้องนี้
+        const reports = await Report.find({ roomId: roomId })
+            .select('-status -__v') // ✂️ ตัด status และ __v ทิ้งตามที่ขอ
+            .populate('reportedUser', 'username profileImage') // ดึงรูป/ชื่อ คนโดนรีพอร์ต
+            .populate('reporterUser', 'username profileImage') // ดึงรูป/ชื่อ คนแจ้ง
+            .sort({ createdAt: -1 });
+
+        res.status(200).json({
+            success: true,
+            count: reports.length,
+            data: reports
+        });
+
+    } catch (error) {
+        console.error('Error fetching room reports:', error);
+        res.status(500).json({ success: false, message: 'Server Error' });
+    }
+}

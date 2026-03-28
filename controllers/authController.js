@@ -1,96 +1,192 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const Otp = require('../models/Otp');
+const otpService = require('../services/otpService');
 
 const SECRET_KEY = process.env.JWT_SECRET;
+
+// (OTP)
+exports.requestOtp = async (req, res) => {
+    try {
+        const { phoneNumber } = req.body;
+        console.log('req.body =', req.body);
+
+        if (!phoneNumber) {
+            return res.status(400).json({ success: false, message: 'กรุณากรอกเบอร์โทรศัพท์' });
+        }
+
+        const otpCode = await otpService.sendOtp(phoneNumber);
+
+        res.json({ 
+            success: true, 
+            message: 'ส่ง OTP (จำลอง) สำเร็จ',
+            data: {
+                otp: otpCode 
+            }
+        });
+
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ success: false, message: 'Server Error' });
+    }
+};
 
 // (Register)
 exports.register = async (req, res) => {
     try {
-        const { username, password, firstName, lastName, phoneNumber, gender } = req.body;
-        const existingUser = await User.findOne({ username });
-        if (existingUser) return res.status(400).json({ message: 'User already exists' });
+        const { username, phoneNumber, password, confirmPassword, otp } = req.body;
 
-        const hashedPassword = await bcrypt.hash(password, 10);
-        const newUser = new User({ 
-            username, 
-            password: hashedPassword,
-            firstName,
-            lastName,
+        if (!username || !phoneNumber || !password || !confirmPassword || !otp) {
+            return res.status(400).json({ success: false, message: 'กรุณากรอกข้อมูลให้ครบถ้วน' });
+        }
+
+        if (password !== confirmPassword) {
+            return res.status(400).json({ success: false, message: 'รหัสผ่านไม่ตรงกัน' });
+        }
+
+        // ตรวจสอบ OTP
+        const otpValidation = await otpService.verifyOtp(phoneNumber, otp);
+        if (!otpValidation.valid) {
+            return res.status(400).json({ success: false, message: otpValidation.message });
+        }
+
+        const existingPhone = await User.findOne({ phoneNumber });
+        if (existingPhone) {
+            return res.status(400).json({ success: false, message: 'เบอร์โทรศัพท์นี้ถูกใช้งานแล้ว' });
+        }
+
+        const newUser = new User({
+            username,
+            password,
             phoneNumber,
-            gender
         });
-        await newUser.save(); 
 
-        res.status(201).json({ message: 'User registered successfully!' });
+        await newUser.save();
+
+        await Otp.deleteOne({ phoneNumber }); // ลบ OTP ทิ้งเมื่อสมัครเสร็จ
+
+        res.status(201).json({ success: true, message: 'สมัครสมาชิกสำเร็จ!' });
+
     } catch (error) {
         console.error(error);
-        res.status(500).json({ message: 'Server Error' });
+        res.status(500).json({ success: false, message: 'Server Error' });
     }
 };
 
 // (Login)
 exports.login = async (req, res) => {
     try {
-        const { username, password } = req.body;
-        const user = await User.findOne({ username });
-        if (!user) return res.status(400).json({ message: 'User not found' });
+        const { phoneNumber, password } = req.body;
+
+        if (!phoneNumber || !password) {
+            return res.status(400).json({ success: false, message: 'กรุณากรอกเบอร์โทรศัพท์และรหัสผ่าน' });
+        }
+
+        const user = await User.findOne({ phoneNumber });
+        if (!user) {
+            return res.status(400).json({ success: false, message: 'เบอร์โทรศัพท์หรือรหัสผ่านไม่ถูกต้อง' });
+        }
 
         const isMatch = await bcrypt.compare(password, user.password);
-        if (!isMatch) return res.status(400).json({ message: 'Invalid credentials' });
-
-        const token = jwt.sign({ id: user._id, username: user.username }, SECRET_KEY, { expiresIn: '1d' });
-        res.json({ 
-            message: 'Login successful', 
-            token,
-            user: { 
-                username: user.username,
-                firstName: user.firstName,
-                lastName: user.lastName
-            }
-        });
-    } catch (error) {
-        res.status(500).json({ message: 'Server Error' });
-    }
-}; 
-
-//  (Update Profile)
-exports.updateProfile = async (req, res) => {
-    try {
-        const userId = req.userId; 
-        const { firstName, lastName, password } = req.body;
-
-        let user = await User.findById(userId);
-        if (!user) {
-            return res.status(404).json({ message: 'User not found' });
+        if (!isMatch) {
+            return res.status(400).json({ success: false, message: 'เบอร์โทรศัพท์หรือรหัสผ่านไม่ถูกต้อง' });
         }
-
-        if (firstName) user.firstName = firstName;
-        if (lastName) user.lastName = lastName;
-
-        if (password) {
-            const salt = await bcrypt.genSalt(10);
-            user.password = await bcrypt.hash(password, salt);
-        }
-
-        if (req.file) {
-            user.profilePicture = req.file.path; 
-        }
-
-        await user.save(); 
+        // สร้าง Token
+        const token = jwt.sign({ id: user._id, username: user.username, role: user.role }, SECRET_KEY, { expiresIn: '365d' });
 
         res.json({
-            message: 'อัปเดตโปรไฟล์สำเร็จ!',
+            success: true,
+            message: 'เข้าสู่ระบบสำเร็จ',
+            token,
             user: {
+                id: user._id,
                 username: user.username,
-                firstName: user.firstName,
-                lastName: user.lastName,
-                profilePicture: user.profilePicture
+                phoneNumber: user.phoneNumber,
+                profileImage: user.profileImage,
+                radius: user.radius,
+                role: user.role
             }
         });
 
     } catch (error) {
         console.error(error);
-        res.status(500).json({ message: 'Server Error' });
+        res.status(500).json({ success: false, message: 'Server Error' });
+    }
+};
+
+exports.checkPhoneNumber = async (req, res) => {
+    try {
+        const { phoneNumber } = req.body;
+
+        if (!phoneNumber) {
+            return res.status(400).json({ success: false, message: 'กรุณากรอกเบอร์โทรศัพท์' });
+        }
+
+        const user = await User.findOne({ phoneNumber });
+
+        if (user) {
+            return res.status(200).json({
+                success: true,
+                exists: true,
+                message: 'พบเบอร์โทรศัพท์ในระบบ'
+            });
+        } else {
+            return res.status(200).json({
+                success: true,
+                exists: false,
+                message: 'ไม่พบเบอร์โทรศัพท์ในระบบ'
+            });
+        }
+
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ success: false, message: 'Server Error' });
+    }
+};
+
+exports.resetPassword = async (req, res) => {
+    try {
+        const { phoneNumber, newPassword, confirmPassword } = req.body;
+
+        if (!phoneNumber || !newPassword || !confirmPassword) {
+            return res.status(400).json({ success: false, message: 'กรุณากรอกข้อมูลให้ครบถ้วน' });
+        }
+
+        if (newPassword !== confirmPassword) {
+            return res.status(400).json({ success: false, message: 'รหัสผ่านไม่ตรงกัน' });
+        }
+
+        const user = await User.findOne({ phoneNumber });
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'ไม่พบผู้ใช้งาน' });
+        }
+
+        user.password = newPassword;
+        await user.save();
+
+        res.json({ success: true, message: 'รีเซ็ตรหัสผ่านสำเร็จ!' });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ success: false, message: 'Server Error' });
+    }
+};
+
+exports.logout = async (req, res) => {
+    try {
+        // ดึง ID ของคนที่จะออก (ได้มาจาก verifyToken)
+        const userId = req.user ? req.user.id : req.userId;
+
+        // ลบ fcmToken ออกจาก User คนนั้น (ตั้งเป็น null หรือ "")
+        await User.findByIdAndUpdate(userId, { fcmToken: null });
+
+        res.json({
+            success: true,
+            message: 'ออกจากระบบสำเร็จ (หยุดการแจ้งเตือนแล้ว)'
+        });
+
+    } catch (error) {
+        console.error("Logout Error:", error);
+        res.status(500).json({ success: false, message: 'Server Error' });
     }
 };
